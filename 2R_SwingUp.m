@@ -1,7 +1,7 @@
  clear all
 clc
 
-syms q1 q2 q1D q2D q1DD q2DD v real;
+syms q1 q2 q1D q2D q1DD q2DD v tau real;
 
 m1 = 0.2;
 m2 = 0.2;
@@ -14,6 +14,7 @@ l2 = 0.2;
 
 q = [q1;q2];
 qD = [q1D;q2D];
+qDD = [q1DD;q2DD];
 
 a1 = m1*lc1^2 + I1 + I2 + m2*(l1^2 + lc2^2);
 a2 = m2*l1*lc2;
@@ -50,19 +51,23 @@ requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*M(1,1)\(C(1) + g(1)));
 
 requiredQ1DD = -M(1,1)\(M(1,2)*q2DD + C(1) + g(1));
 
+tauCheck = M(2,1)*q1DD + M(2,2)*q2DD + C(2) + g(2);
+
+directQ2DD = (M(2,2)-M(2,1)*M(1,1)\M(1,2))\(tau +M(2,1)*M(1,1)\(C(1)+g(1)) - C(2) - g(2));
+
 state = [q ;qD];
-oldState = [mod(-pi/2,2*pi) 0 0 0]';
+oldState = [-pi/2 0 0 0]';
 newState = [0 0 0 0]';
 
 %0 refers to the desired acceleration
 goal = [pi/2 0 0];
 
-Kd = 1;
+Kd = 1 ;
 Kp = 1;
 deltaT = 0.15;
-totalT = 25;
+totalT = 30;
 saturationQ2D = 1;
-
+tauLimit = 2;
 jointLimitQ1 = pi;
 jointLimitQ2 = pi;
 
@@ -75,6 +80,8 @@ for t=0:deltaT:totalT
     if (mod(t,1)==0)
         disp(t);
     end
+    
+    tauViolated = false;
     
     indexStorage = indexStorage+1;
     
@@ -97,6 +104,26 @@ for t=0:deltaT:totalT
     q2DDActual = subs(requiredQ2DD, [state; v], [oldState; vA]);    
     q1DDActual = subs(requiredQ1DD, [state; q2DD], [oldState; q2DDActual]);
     
+    tauActual = vpa(subs(tauCheck,[state;qDD],[oldState;q1DDActual;q2DDActual]),4) 
+    
+    if (tauActual > tauLimit)
+        tauActual
+        t
+        tauActual = tauLimit;
+        tauViolated = true;
+    elseif (tauActual < - tauLimit)
+        tauActual
+        t
+        tauActual = - tauLimit;
+        tauViolated = true;
+    end
+    if (tauViolated==true)
+      q2DDActual = subs(directQ2DD,[state;tau], [oldState;tauActual]);
+      q1DDActual = subs(requiredQ1DD, [state; q2DD], [oldState; q2DDActual]);
+     
+    end
+    
+    
     newState(3:4) = [oldState(3) + q1DDActual*deltaT;
                     oldState(4) + q2DDActual*deltaT];
                 
@@ -106,6 +133,16 @@ for t=0:deltaT:totalT
     elseif (newState(4)< - saturationQ2D)
             newState(4) = - saturationQ2D;
     end
+    
+    
+  
+    
+    
+    
+    
+    
+    
+    
     
     
     
