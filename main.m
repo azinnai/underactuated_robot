@@ -1,4 +1,4 @@
-clear all
+ clear all
 clc
 
 syms q1 q2 q1D q2D q1DD q2DD v real;
@@ -57,12 +57,14 @@ newState = [0 0 0 0]';
 %0 refers to the desired acceleration
 goal = [pi/2 0 0];
 
-Kd = 0.15;
-Kp = 0.5;
+Kd = 1;
+Kp = 1;
 deltaT = 0.15;
-totalT = 3;
-saturationQ1D = 2;
-saturationQ2D = 2;
+totalT = 25;
+saturationQ2D = 1;
+
+jointLimitQ1 = pi;
+jointLimitQ2 = pi;
 
 totalIterations = ceil(totalT/deltaT);
 stateStorage = zeros(totalIterations,2);
@@ -70,15 +72,14 @@ taskStorage = zeros(totalIterations,1);
 indexStorage = 0;
 
 for t=0:deltaT:totalT
-    
-    %t
-    %oldState'
+    if (mod(t,1)==0)
+        disp(t);
+    end
     
     indexStorage = indexStorage+1;
     
     taskState = [subs(comAngle,state(1:2), oldState(1:2)) subs(comAngleDot,state, oldState) 0];
-    
-    %vpa(taskState,3)
+  
     
     stateStorage(indexStorage,:) = oldState(1:2);
     taskStorage(indexStorage) = taskState(1);
@@ -92,23 +93,13 @@ for t=0:deltaT:totalT
     errorVec = vpa(atan2(errorMat(2,1),errorMat(1,1)),3);
     
     vA = goal(3) + Kd*(goal(2) - taskState(2)) + Kp*errorVec;
-    %vA = goal(3) + Kd*(goal(2) - taskState(2)) + Kp*(goal(1) - taskState(1))
-    
-    q2DDActual = subs(requiredQ2DD, [state; v], [oldState; vA]);
-    
+
+    q2DDActual = subs(requiredQ2DD, [state; v], [oldState; vA]);    
     q1DDActual = subs(requiredQ1DD, [state; q2DD], [oldState; q2DDActual]);
     
     newState(3:4) = [oldState(3) + q1DDActual*deltaT;
                     oldState(4) + q2DDActual*deltaT];
                 
-                
-    if (newState(3)> saturationQ1D)
-        newState(3) = saturationQ1D;
-        
-    elseif (newState(3)< - saturationQ1D)
-            newState(3) = - saturationQ1D;
-    end
-    
     if (newState(4)> saturationQ2D)
         newState(4) = saturationQ2D;
         
@@ -121,6 +112,19 @@ for t=0:deltaT:totalT
     newState(1:2) = [mod(oldState(1) + newState(3)*deltaT + 0.5*q1DDActual*deltaT^2, 2*pi);
                     mod(oldState(2) + newState(4)*deltaT + 0.5*q2DDActual*deltaT^2, 2*pi)];
     
+  %  if (newState(1)>jointLimitQ1)
+  %      newState(1) = jointLimitQ1;
+  %  elseif (newState(1)< -jointLimitQ1)
+  %      newState(1) = -jointLimitQ1;
+  %  end
+       
+    
+  %  if (newState(2)>jointLimitQ2)
+  %      newState(2) = jointLimitQ2;
+  %  elseif (newState(2)< -jointLimitQ2)
+  %      newState(2) = -jointLimitQ2;
+  %  end
+                
     oldState = newState;
   
     
@@ -137,14 +141,17 @@ figure
 xlim([-0.5,0.5]);
 ylim([-0.5,0.5]);
 
-
+ax = gca;
+task_text = text(ax.XLim(1),ax.YLim(2),'');
+task_text.FontSize = 14;
+task_text.FontWeight = 'bold';
 
 link1 = line;
 link1.LineWidth = 2.5;
-link1.Color = 'r';
+link1.Color = 'b';
 link2 = line;
 link2.LineWidth = 2.5;
-link2.Color = 'b';
+link2.Color = 'r';
 
 legend([link1,link2], 'UNACTUATED','ACTUATED')
 
@@ -156,6 +163,8 @@ for i=1:size(stateStorage,1)
     
     set(link1,'XData',[x0(1),x1(1)], 'YData',[x0(2),x1(2)] )
     set(link2,'XData',[x1(1),x2(1)], 'YData',[x1(2),x2(2)])
+    
+    task_text.String = strcat( mat2str(double(vpa(taskStorage(i),3)),3),' COM Angle');
     
     drawnow;
     
