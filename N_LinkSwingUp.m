@@ -1,8 +1,77 @@
- clear all
+clear all
 clc
 
-syms q1 q2 q1D q2D q1DD q2DD v tau real;
+syms q1 q2 q3 q4 q5 q1D q2D q3D q4D q5D q1DD q2DD q3DD q4DD q5DD v tau real;
 
+q = [q1;q2;q3;q4;q5];
+qD = [q1D;q2D;q3D;q4D;q5D];
+qDD = [q1DD;q2DD;q3DD;q4DD;q5DD];
+
+
+
+%robot parameters for 5r robots with all equal links
+m = 0.2;
+l = 0.2;
+I = 0.05;
+lc = 0.1;
+
+s1 = sin(q1);
+s2 = sin(q2);
+s3 = sin(q3);
+s4 = sin(q4);
+s5 = sin(q5);
+s12 = sin(q1+q2);
+s123 = sin(q1+q2+q3);
+s1234 = sin(q1+q2+q3+q4);
+s12345 = sin(q1+q2+q3+q4+q5); 
+
+
+c1 = cos(q1);
+c2 = cos(q2);
+c3 = cos(q3);
+c4 = cos(q4);
+c5 = cos(q5);
+c12 = cos(q1+q2);
+c123 = cos(q1+q2+q3);
+c1234 = cos(q1+q2+q3+q4);
+c12345 = cos(q1+q2+q3+q4+q5); 
+
+%robot link COM
+pc1 = [lc*c1;lc*s1];
+pc2 = [l*c1+lc*c12;l*s1+lc*s12];
+pc3 = [l*c1+l*c12+lc*c123;l*s1+l*s12+lc*s123];
+pc4 = [l*c1+l*c12+l*c123+lc*c1234;l*s1+l*s12+l*s123+lc*s1234];
+pc5 = [l*c1+l*c12+l*c123+l*c1234+lc*c12345;l*s1+l*s12+l*s123+l*s1234+lc*s12345];
+
+Jc1 = jacobian(pc1,q);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+%Robot parameters
 m1 = 0.2;
 m2 = 0.2;
 I1 = 0.05;
@@ -16,15 +85,13 @@ q = [q1;q2];
 qD = [q1D;q2D];
 qDD = [q1DD;q2DD];
 
+g0 = -9.81;
+
+%Robot dynamic parameters
 a1 = m1*lc1^2 + I1 + I2 + m2*(l1^2 + lc2^2);
 a2 = m2*l1*lc2;
 a3 = m2*lc2^2 + I2;
 
-h = -m2*l1*lc2*sin(q2);
-
-g0 = -9.81;
-
-%2R inertia Matrix symbolic
 M = [a1 + 2*a2*cos(q2), a3 + a2*cos(q2);
     a3 + a2*cos(q2), a3];
 C = [-a2*sin(q2)*(q2D^2+2*q1D*q2D);
@@ -33,11 +100,15 @@ C = [-a2*sin(q2)*(q2D^2+2*q1D*q2D);
 g = g0*[(m1*lc1 + m2*l1)*cos(q1) + m2*lc2*cos(q1+q2);
         m2*lc2*cos(q1+q2)];
 
+    
+%Task space definition    
 comPos = [(lc1*cos(q1) + l1*cos(q1) + lc2*cos(q1+q2))/2;
     (lc1*sin(q1) + l1*sin(q1) + lc2*sin(q1+q2))/2];
 
 comAngle = atan2(comPos(2), comPos(1));
 
+
+%Jacobian Definition
 J = simplify(jacobian(comAngle, q));
 
 Jbar = simplify(J(2) - J(1)*M(1,1)\M(1,2));
@@ -47,6 +118,7 @@ Jdot = [ 0, -(lc2*sin(q2)*(l1 + lc1)*q2D*(l1^2 + 2*l1*lc1 + lc1^2 - lc2^2))/(l1^
 
 comAngleDot = J * qD;
 
+%Acceleration and torque equations
 requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*M(1,1)\(C(1) + g(1)));
 
 requiredQ1DD = -M(1,1)\(M(1,2)*q2DD + C(1) + g(1));
