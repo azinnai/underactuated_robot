@@ -1,10 +1,9 @@
 function B = Bmatrix(T,N_joints)
 
-syms dq1 dq2 dq3 dq4 dq5 dq6 dq7 dq8 dq9 dq10 real
+syms q1D q2D q3D q4D q5D real;
 
-joint_velocities = [dq1 dq2 dq3 dq4 dq5 dq6 dq7 dq8 dq9 dq10];
+joint_velocities = [q1D;q2D;q3D;q4D;q5D];
 
-joint_velocities = joint_velocities(1:N_joints);
 
 B2 = sym('B2',N_joints);
 Bt = sym('Bt',N_joints);
@@ -34,7 +33,7 @@ end
 
 B = simplify(B2);
 
-%B = collect(B2,2);
+B = simplify(collect(B2,5));
 
 end
 

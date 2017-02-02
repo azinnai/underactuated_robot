@@ -1,19 +1,27 @@
 clear all
 clc
 
-syms q1 q2 q3 q4 q5 q1D q2D q3D q4D q5D q1DD q2DD q3DD q4DD q5DD v tau real;
+syms q1 q2 q3 q4 q5 q1D q2D q3D q4D q5D q1DD q2DD q3DD q4DD q5DD v tau1 tau2 tau3 tau4 tau5 real;
+syms m l I lc real;
+
+tic
 
 q = [q1;q2;q3;q4;q5];
 qD = [q1D;q2D;q3D;q4D;q5D];
 qDD = [q1DD;q2DD;q3DD;q4DD;q5DD];
-
-
+omega = [q1D; q1D+q2D; q1D+q2D+q3D; q1D+q2D+q3D+q4D; q1D+q2D+q3D+q4D+q5D];
+%to remove a joint add 0 to the desired tau.
+tau = [tau1; tau2; tau3; tau4; tau5];
+n_joints = 5;
+active_joints = [0;1;0;1;0];
+n_joints_unactive = sum(active_joints(:) ==0);
+%n_joints_active = n_joints - n_joints_unactive;
 
 %robot parameters for 5r robots with all equal links
-m = 0.2;
-l = 0.2;
-I = 0.05;
-lc = 0.1;
+%m = 0.2;
+%l = 0.2;
+%I = 0.05;
+%lc = 0.1;
 
 s1 = sin(q1);
 s2 = sin(q2);
@@ -44,111 +52,123 @@ pc4 = [l*c1+l*c12+l*c123+lc*c1234;l*s1+l*s12+l*s123+lc*s1234];
 pc5 = [l*c1+l*c12+l*c123+l*c1234+lc*c12345;l*s1+l*s12+l*s123+l*s1234+lc*s12345];
 
 Jc1 = jacobian(pc1,q);
+Jc2 = jacobian(pc2,q);
+Jc3 = jacobian(pc3,q);
+Jc4 = jacobian(pc4,q);
+Jc5 = jacobian(pc5,q);
+
+vc1 = Jc1*qD;
+vc2 = Jc2*qD;
+vc3 = Jc3*qD;
+vc4 = Jc4*qD;
+vc5 = Jc5*qD;
+
+syms g0 real;
+
+g = [0;g0];
+U = -m*g'*(pc1 + pc2 + pc3 + pc4 + pc5);  
 
 
+Tc = 0.5*m*(vc1'*vc1 + vc2'*vc2 + vc3'*vc3 + vc4'*vc4 + vc5'*vc5);
+%Tc = 0.5*m*(vc1'*vc1 + vc2'*vc2);
+Tomega = simplify(0.5*I*omega'*omega);
+
+T = Tc + Tomega;
+B = Bmatrix(T,n_joints);
+C = Cmatrix(B);
+h = jacobian(U,q)';
 
 
+B = reorderingMatrix(B, active_joints);
+C = reorderingMatrix(C, active_joints);
+h = reorderingMatrix(h, active_joints);
+tau = reorderingMatrix(tau, active_joints);
+tau(1:n_joints_unactive) = zeros(n_joints_unactive,1);
+q_ordered = reorderingMatrix(q, active_joints);
+qD_ordered = reorderingMatrix(qD, active_joints);
+qDD_ordered = reorderingMatrix(qDD, active_joints);
+
+q1DD_ordered = qDD_ordered(1:n_joints_unactive);
+q2DD_ordered = qDD_ordered(n_joints_unactive+1:n_joints);
+
+q1D_ordered = qD_ordered(1:n_joints_unactive);
+q2D_ordered = qD_ordered(n_joints_unactive+1:n_joints);
+
+q1_ordered = q_ordered(1:n_joints_unactive);
+q2_ordered = q_ordered(n_joints_unactive+1:n_joints);
 
 
+comPos = (pc1 + pc2 + pc3 + pc4 + pc5)/n_joints;
+comAngle = atan2(comPos(2),comPos(1));
+comLength = norm(comPos);
+task = [comAngle; comLength];
 
+J = jacobian(task, q_ordered);
+J1 = J(:,1:n_joints_unactive);
+J2 = J(:,n_joints_unactive+1:n_joints);
 
+B11 = B(1:n_joints_unactive,1:n_joints_unactive);
+B12 = B(1:n_joints_unactive,n_joints_unactive+1:n_joints);
+B21 = B(n_joints_unactive+1:n_joints,1:n_joints_unactive);
+B22 = B(n_joints_unactive+1:n_joints,n_joints_unactive+1:n_joints);
 
+C1 = C(1:n_joints_unactive);
+C2 = C(n_joints_unactive+1:n_joints);
 
+h1 = h(1:n_joints_unactive);
+h2 = h(n_joints_unactive+1:n_joints);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-%Robot parameters
-m1 = 0.2;
-m2 = 0.2;
-I1 = 0.05;
-I2 = 0.05;
-lc1 = 0.1;
-lc2 = 0.1;
-l1 = 0.2;
-l2 = 0.2;
-
-q = [q1;q2];
-qD = [q1D;q2D];
-qDD = [q1DD;q2DD];
-
-g0 = -9.81;
-
-%Robot dynamic parameters
-a1 = m1*lc1^2 + I1 + I2 + m2*(l1^2 + lc2^2);
-a2 = m2*l1*lc2;
-a3 = m2*lc2^2 + I2;
-
-M = [a1 + 2*a2*cos(q2), a3 + a2*cos(q2);
-    a3 + a2*cos(q2), a3];
-C = [-a2*sin(q2)*(q2D^2+2*q1D*q2D);
-    a2*sin(q2)*q1D^2];
-
-g = g0*[(m1*lc1 + m2*l1)*cos(q1) + m2*lc2*cos(q1+q2);
-        m2*lc2*cos(q1+q2)];
-
-    
-%Task space definition    
-comPos = [(lc1*cos(q1) + l1*cos(q1) + lc2*cos(q1+q2))/2;
-    (lc1*sin(q1) + l1*sin(q1) + lc2*sin(q1+q2))/2];
-
-comAngle = atan2(comPos(2), comPos(1));
-
-
-%Jacobian Definition
-J = simplify(jacobian(comAngle, q));
-
-Jbar = simplify(J(2) - J(1)*M(1,1)\M(1,2));
+toc
+disp('fine parte iniziale');
+tic
+%Jdot = qD_ordered'*jacobian([J(1,:);J(2,:)],q_ordered);
+Jdot1 = qD_ordered'*jacobian(J(1,:),q_ordered);
+Jdot2 = qD_ordered'*jacobian(J(2,:),q_ordered);
+Jdot = [Jdot1;
+        Jdot2];
+toc
+disp('prima di pinv');
+tic
+Jbar = J2 -J1*(B11\B12);
 JbarPinv = pinv(Jbar);
+toc
+disp('dopo di pinv');
+tic
+taskDot = J * qD;
 
-Jdot = [ 0, -(lc2*sin(q2)*(l1 + lc1)*q2D*(l1^2 + 2*l1*lc1 + lc1^2 - lc2^2))/(l1^2 + 2*l1*lc1 + 2*cos(q2)*l1*lc2 + lc1^2 + 2*cos(q2)*lc1*lc2 + lc2^2)^2];
+requiredQ2DD = JbarPinv * (v - Jdot*qD + J1*(B11\(C1 + h1)));
+requiredQ1DD = -B11\(B12*q2DD_ordered + C1 + h1);
 
-comAngleDot = J * qD;
+tauCheck = B21*q1DD_ordered + B22*q2DD_ordered + C2 + h2;
 
-%Acceleration and torque equations
-requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*M(1,1)\(C(1) + g(1)));
+directQ22D = (B22 - B21*(B11\B12))\(tau + B21*(B11\(C1 + h1)) - C2 - h2);
 
-requiredQ1DD = -M(1,1)\(M(1,2)*q2DD + C(1) + g(1));
+state = [q_ordered;qD_ordered];
 
-tauCheck = M(2,1)*q1DD + M(2,2)*q2DD + C(2) + g(2);
+oldState = [-pi/2 0 0 0 0 0 0 0 0 0]';
+oldState = reorderingMatrix(oldState,active_joints);
 
-directQ2DD = (M(2,2)-M(2,1)*M(1,1)\M(1,2))\(tau +M(2,1)*M(1,1)\(C(1)+g(1)) - C(2) - g(2));
+newState = [0 0 0 0 0 0 0 0 0 0]';
 
-state = [q ;qD];
-oldState = [-pi/2 0 0 0]';
-newState = [0 0 0 0]';
-
-%0 refers to the desired acceleration
-goal = [pi/2 0 0];
-
-Kd = 1 ;
+goal = [pi/2 0 0;
+        l*5/2 0 0];
+    
+Kd = 1;
 Kp = 1;
 deltaT = 0.15;
 totalT = 30;
-saturationQ2D = 1;
+saturationQD = 1;
 tauLimit = 2;
-jointLimitQ1 = pi;
-jointLimitQ2 = pi;
+jointLimitQ = pi;
 
 totalIterations = ceil(totalT/deltaT);
-stateStorage = zeros(totalIterations,2);
-taskStorage = zeros(totalIterations,1);
+stateStorage = zeros(totalIterations,n_joints*2);
+taskStorage = zeros(totalIterations,size(task,1)*2);
 indexStorage = 0;
-
+toc
+disp('inizio simulazione');
 for t=0:deltaT:totalT
+    tic
     if (mod(t,1)==0)
         disp(t);
     end
@@ -156,70 +176,68 @@ for t=0:deltaT:totalT
     tauViolated = false;
     
     indexStorage = indexStorage+1;
-    
-    taskState = [subs(comAngle,state(1:2), oldState(1:2)) subs(comAngleDot,state, oldState) 0];
+    %task state è 2x3, come goal. L'ultima colonna inutile serve per fare
+    %combaciare le dimensioni.
+    taskState = [subs(task,state, oldState) subs(taskDot, state, oldState) [0 0]' ];
   
     
-    stateStorage(indexStorage,:) = oldState(1:2);
-    taskStorage(indexStorage) = taskState(1);
+    stateStorage(indexStorage,:) = oldState;
+    taskStorage(indexStorage,:) = [taskState(:,1)' taskState(:,2)'];
+
     
     
+    actualAngleMat = [cos(taskState(1,1)) - sin(taskState(1,1)); sin(taskState(1,1)), cos(taskState(1,1))];
+    referenceAngleMat = [cos(goal(1,1)), - sin(goal(1,1)); sin(goal(1,1)), cos(goal(1,1))];
+    errorAngleMat = (actualAngleMat)\referenceAngleMat;
+    errorAngleScalar = atan2(errorAngleMat(2,1),errorAngleMat(1,1));
     
+    errorVec = [errorAngleScalar;
+                taskState(2,1)- goal(2,1)];
     
-    actualMat = [cos(taskState(1)), - sin(taskState(1)); sin(taskState(1)), cos(taskState(1))];
-    referenceMat = [cos(goal(1)), - sin(goal(1)); sin(goal(1)), cos(goal(1))];
-    errorMat = (actualMat)\referenceMat;
-    errorVec = vpa(atan2(errorMat(2,1),errorMat(1,1)),3);
-    
-    vA = goal(3) + Kd*(goal(2) - taskState(2)) + Kp*errorVec;
+    vA = goal(:,3) + Kd*(goal(:,2) - taskState(:,2)) + Kp*errorVec;
 
     q2DDActual = subs(requiredQ2DD, [state; v], [oldState; vA]);    
     q1DDActual = subs(requiredQ1DD, [state; q2DD], [oldState; q2DDActual]);
     
-    tauActual = vpa(subs(tauCheck,[state;qDD],[oldState;q1DDActual;q2DDActual]),4) 
+    tauActual = subs(tauCheck,[state;qDD],[oldState;q1DDActual;q2DDActual]); 
     
-    if (tauActual > tauLimit)
-        tauActual
-        t
-        tauActual = tauLimit;
-        tauViolated = true;
-    elseif (tauActual < - tauLimit)
-        tauActual
-        t
-        tauActual = - tauLimit;
-        tauViolated = true;
+    for i=1:size(tauActual,1)
+        if (tauActual(i) > tauLimit)
+            tauActual(i) = tauLimit;
+            tauViolated = true;
+        elseif (tauActual(i) < - tauLimit)
+            tauActual(i) = - tauLimit;
+            tauViolated = true;
+        end
     end
+    
     if (tauViolated==true)
       q2DDActual = subs(directQ2DD,[state;tau], [oldState;tauActual]);
       q1DDActual = subs(requiredQ1DD, [state; q2DD], [oldState; q2DDActual]);
-     
+
     end
     
     
-    newState(3:4) = [oldState(3) + q1DDActual*deltaT;
-                    oldState(4) + q2DDActual*deltaT];
+   % newState(n_joints+1:n_joints*2) = [oldState(n_joints+1:n_joints+1+n_joints_unactive) + q1DDActual'*deltaT
+    %oldState(n_joints+1+n_joints_unactive+1 : n_joints*2) + q2DDActual'*deltaT];
+    newState(n_joints+1:n_joints*2) = oldState(n_joints+1:n_joints*2) + [q1DDActual' q2DDActual']*deltaT; 
+    
+    
                 
-    if (newState(4)> saturationQ2D)
-        newState(4) = saturationQ2D;
-        
-    elseif (newState(4)< - saturationQ2D)
-            newState(4) = - saturationQ2D;
-    end
+    %if (newState(4)> saturationQ2D)
+    %    newState(4) = saturationQ2D;
+    %    
+    %elseif (newState(4)< - saturationQ2D)
+    %        newState(4) = - saturationQ2D;
+    %end
+    
+
+    
+   % newState(1:n_joints) = [mod(oldState(1:n_joints) + newState(n_joints+1:n_joints+1+n_joints_unactive)*deltaT + 0.5*q1DDActual*deltaT^2, 2*pi);
+    %                mod(oldState(2) + newState(4)*deltaT + 0.5*q2DDActual*deltaT^2, 2*pi)];
+    newState(1:n_joints) = mod(oldState(1:n_joints) + newState(n_joints+1:n_joints*2)*deltaT + 0.5*[q1DDActual' q2DDActual']*deltaT^2, 2*pi);
     
     
-  
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    newState(1:2) = [mod(oldState(1) + newState(3)*deltaT + 0.5*q1DDActual*deltaT^2, 2*pi);
-                    mod(oldState(2) + newState(4)*deltaT + 0.5*q2DDActual*deltaT^2, 2*pi)];
     
   %  if (newState(1)>jointLimitQ1)
   %      newState(1) = jointLimitQ1;
@@ -236,51 +254,30 @@ for t=0:deltaT:totalT
                 
     oldState = newState;
   
-    
+    toc
+    disp('fine simulazione');
 end
 
+  
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%Drawing part
 
-pause %Wait spacebar press to start real-time simulation 
 
-figure
-xlim([-0.5,0.5]);
-ylim([-0.5,0.5]);
 
-ax = gca;
-task_text = text(ax.XLim(1),ax.YLim(2),'');
-task_text.FontSize = 14;
-task_text.FontWeight = 'bold';
 
-link1 = line;
-link1.LineWidth = 2.5;
-link1.Color = 'b';
-link2 = line;
-link2.LineWidth = 2.5;
-link2.Color = 'r';
 
-legend([link1,link2], 'UNACTUATED','ACTUATED')
 
-x0 = [0,0]; %Origin of the base link
 
-for i=1:size(stateStorage,1)
-    x1 = [l1*cos(stateStorage(i,1)), l2*sin(stateStorage(i,1))];
-    x2 = x1 + [l2*cos(stateStorage(i,1) + stateStorage(i,2)),l2*sin(stateStorage(i,1) + stateStorage(i,2))];
-    
-    set(link1,'XData',[x0(1),x1(1)], 'YData',[x0(2),x1(2)] )
-    set(link2,'XData',[x1(1),x2(1)], 'YData',[x1(2),x2(2)])
-    
-    task_text.String = strcat( mat2str(double(vpa(taskStorage(i),3)),3),' COM Angle');
-    
-    drawnow;
-    
-    pause(0.15);
-    
-    
-end
+
+
+
+
+
+
+
+
+
+
 
 
 
