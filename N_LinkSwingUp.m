@@ -1,7 +1,8 @@
 clear all
 clc
 
-syms q1 q2 q3 q4 q5 q1D q2D q3D q4D q5D q1DD q2DD q3DD q4DD q5DD v tau1 tau2 tau3 tau4 tau5 real;
+syms q1 q2 q3 q4 q5 q1D q2D q3D q4D q5D q1DD q2DD q3DD q4DD q5DD tau1 tau2 tau3 tau4 tau5 real;
+
 %syms m l I lc real;
 
 tic
@@ -138,7 +139,8 @@ Jbar = J2 -J1*(B11\B12);
 %JbarPinv = pinv(Jbar);
 %pseudoPt1 = inv(Jbar*Jbar');
 %JbarPinv = Jbar'*pseudoPt1;
-syms JbarPinv real;
+JbarPinv = sym('Jbp',size(Jbar')); %JbarPinv ha dimensioni di Jbar trasposta
+v = sym('v',size(task));
 taskDot = J * qD;
 toc
 disp('dopo pinv');
@@ -199,7 +201,7 @@ for t=0:deltaT:totalT
     tauViolated = false;
     
     indexStorage = indexStorage+1;
-    %task state ? 2x3, come goal. L'ultima colonna inutile serve per fare
+    %task state ha dimensione 2x3, come goal. L'ultima colonna inutile serve per fare
     %combaciare le dimensioni.
     taskState = [subs(task,state, oldState) subs(taskDot, state, oldState) [0 0]' ];
   
@@ -231,14 +233,24 @@ for t=0:deltaT:totalT
     tic
     %Le subs devono stare divise, perch? JbarPinv e v sono simboli 1x1
     %mentre JbarPinvActual e vA sono matrici (di dimensioni diverse) quindi
-    %non posso creare un vettore colonna che contiene tutte queste cose
-    
-    q2DDActual = subs(requiredQ2DD,{v},{vA});
-    q2DDActual = subs(q2DDActual, state, oldState);
-    q2DDActual = subs(q2DDActual,{JbarPinv},{JbarPinvActual});
-    %NON FUNZIONA! Sostituisce a v ogni elemento di vA, espandendo il
+    %non posso creare un vettore colonna che contiene tutte queste cose.
+    %subs NON FUNZIONA! Sostituisce a v ogni elemento di vA, espandendo il
     %vettore iniziale (requiredq2dd). POSSIBILE SOLUZIONE: istanziare v e
     %JbarPinv come matrici simboliche e sostituire element-wise.
+    %Non funziona neanche cos?
+    for i = 1:size(v,1)
+        v(i) = vA(i);
+    end
+    for i = 1:size(JbarPinv,1)
+        for j = 1:size(JbarPinv,2)
+            JbarPinv(i,j) =JbarPinvActual(i,j);
+        end
+    end
+
+    q2DDActual = subs(requiredQ2DD, state, oldState);
+    %q2DDActual = subs(requiredQ2DD,{v},{vA});
+    %q2DDActual = subs(q2DDActual,{JbarPinv},{JbarPinvActual});
+
     toc
     disp('q2dd');
     tic
