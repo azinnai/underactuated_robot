@@ -1,4 +1,4 @@
- clear all
+clear all
 clc
 
 syms q1 q2 q1D q2D q1DD q2DD v tau real;
@@ -69,7 +69,7 @@ goal = [pi/2 0 0];
 Kd = 1 ;
 Kp = 1;
 deltaT = 0.15;
-totalT = 30;
+totalT = 0;
 saturationQ2D = 1;
 tauLimit = 2;
 jointLimitQ1 = pi;

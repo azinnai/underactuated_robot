@@ -2,7 +2,7 @@ clear all
 clc
 
 syms q1 q2 q3 q4 q5 q1D q2D q3D q4D q5D q1DD q2DD q3DD q4DD q5DD v tau1 tau2 tau3 tau4 tau5 real;
-syms m l I lc real;
+%syms m l I lc real;
 
 tic
 
@@ -10,7 +10,7 @@ q = [q1;q2;q3;q4;q5];
 qD = [q1D;q2D;q3D;q4D;q5D];
 qDD = [q1DD;q2DD;q3DD;q4DD;q5DD];
 omega = [q1D; q1D+q2D; q1D+q2D+q3D; q1D+q2D+q3D+q4D; q1D+q2D+q3D+q4D+q5D];
-%to remove a joint add 0 to the desired tau.
+
 tau = [tau1; tau2; tau3; tau4; tau5];
 n_joints = 5;
 active_joints = [0;1;0;1;0];
@@ -18,10 +18,10 @@ n_joints_unactive = sum(active_joints(:) ==0);
 %n_joints_active = n_joints - n_joints_unactive;
 
 %robot parameters for 5r robots with all equal links
-%m = 0.2;
-%l = 0.2;
-%I = 0.05;
-%lc = 0.1;
+m = 0.2;
+l = 0.2;
+I = 0.05;
+lc = 0.1;
 
 s1 = sin(q1);
 s2 = sin(q2);
@@ -69,11 +69,11 @@ g = [0;g0];
 U = -m*g'*(pc1 + pc2 + pc3 + pc4 + pc5);  
 
 
-Tc = 0.5*m*(vc1'*vc1 + vc2'*vc2 + vc3'*vc3 + vc4'*vc4 + vc5'*vc5);
+Tv = 0.5*m*(vc1'*vc1 + vc2'*vc2 + vc3'*vc3 + vc4'*vc4 + vc5'*vc5);
 %Tc = 0.5*m*(vc1'*vc1 + vc2'*vc2);
 Tomega = simplify(0.5*I*omega'*omega);
 
-T = Tc + Tomega;
+T = Tv + Tomega;
 B = Bmatrix(T,n_joints);
 C = Cmatrix(B);
 h = jacobian(U,q)';
@@ -104,6 +104,11 @@ comLength = norm(comPos);
 task = [comAngle; comLength];
 
 J = jacobian(task, q_ordered);
+toc
+disp('computed jacobian');
+tic
+%J = simplify(J);
+
 J1 = J(:,1:n_joints_unactive);
 J2 = J(:,n_joints_unactive+1:n_joints);
 
@@ -118,35 +123,53 @@ C2 = C(n_joints_unactive+1:n_joints);
 h1 = h(1:n_joints_unactive);
 h2 = h(n_joints_unactive+1:n_joints);
 
-toc
-disp('fine parte iniziale');
-tic
+
+
 %Jdot = qD_ordered'*jacobian([J(1,:);J(2,:)],q_ordered);
 Jdot1 = qD_ordered'*jacobian(J(1,:),q_ordered);
 Jdot2 = qD_ordered'*jacobian(J(2,:),q_ordered);
 Jdot = [Jdot1;
         Jdot2];
-toc
-disp('prima di pinv');
-tic
-Jbar = J2 -J1*(B11\B12);
-JbarPinv = pinv(Jbar);
-toc
-disp('dopo di pinv');
-tic
-taskDot = J * qD;
 
-requiredQ2DD = JbarPinv * (v - Jdot*qD + J1*(B11\(C1 + h1)));
-requiredQ1DD = -B11\(B12*q2DD_ordered + C1 + h1);
+Jbar = J2 -J1*(B11\B12);
+
+
+
+%JbarPinv = pinv(Jbar);
+%pseudoPt1 = inv(Jbar*Jbar');
+%JbarPinv = Jbar'*pseudoPt1;
+syms JbarPinv real;
+taskDot = J * qD;
+toc
+disp('dopo pinv');
+tic
+%%requiredQ2DD = JbarPinv * (v - Jdot*qD + J1*(B11\(C1 + h1)));
+requiredQ2DD = JbarPinv * (v - Jdot*qD + J1*inv(B11)*(C1 + h1));
+toc
+disp('required q2dd');
+tic
+%requiredQ1DD = -B11\(B12*q2DD_ordered + C1 + h1);
+requiredQ1DD = -inv(B11)*(B12*q2DD_ordered + C1 + h1);
+toc
+disp('required q1dd');
+tic
 
 tauCheck = B21*q1DD_ordered + B22*q2DD_ordered + C2 + h2;
+toc
+disp('taucheck');
+tic
 
-directQ22D = (B22 - B21*(B11\B12))\(tau + B21*(B11\(C1 + h1)) - C2 - h2);
+%directQ2DD = (B22 - B21*(B11\B12))\(tau(n_joints_unactive+1:n_joints) + B21*(B11\(C1 + h1)) - C2 - h2);
+directQ2DD = inv(B22 - B21*(inv(B11)*B12))*(tau(n_joints_unactive+1:n_joints) + B21*(inv(B11)*(C1 + h1)) - C2 - h2);
+toc
+disp('directq2dd');
+tic
 
 state = [q_ordered;qD_ordered];
-
-oldState = [-pi/2 0 0 0 0 0 0 0 0 0]';
-oldState = reorderingMatrix(oldState,active_joints);
+%Se i giunti iniziali sono in [-pi/2 0 0 0 0] c'? una divisione per zero in
+%taskDot
+oldState = [-pi/2 0.1 0.1 0.1 0 0 0 0 0 0]';
+oldState = [reorderingMatrix(oldState(1:n_joints),active_joints); reorderingMatrix(oldState(n_joints+1:n_joints*2),active_joints)];
 
 newState = [0 0 0 0 0 0 0 0 0 0]';
 
@@ -176,7 +199,7 @@ for t=0:deltaT:totalT
     tauViolated = false;
     
     indexStorage = indexStorage+1;
-    %task state è 2x3, come goal. L'ultima colonna inutile serve per fare
+    %task state ? 2x3, come goal. L'ultima colonna inutile serve per fare
     %combaciare le dimensioni.
     taskState = [subs(task,state, oldState) subs(taskDot, state, oldState) [0 0]' ];
   
@@ -186,7 +209,7 @@ for t=0:deltaT:totalT
 
     
     
-    actualAngleMat = [cos(taskState(1,1)) - sin(taskState(1,1)); sin(taskState(1,1)), cos(taskState(1,1))];
+    actualAngleMat = [cos(taskState(1,1)), - sin(taskState(1,1)); sin(taskState(1,1)), cos(taskState(1,1))];
     referenceAngleMat = [cos(goal(1,1)), - sin(goal(1,1)); sin(goal(1,1)), cos(goal(1,1))];
     errorAngleMat = (actualAngleMat)\referenceAngleMat;
     errorAngleScalar = atan2(errorAngleMat(2,1),errorAngleMat(1,1));
@@ -195,12 +218,38 @@ for t=0:deltaT:totalT
                 taskState(2,1)- goal(2,1)];
     
     vA = goal(:,3) + Kd*(goal(:,2) - taskState(:,2)) + Kp*errorVec;
-
-    q2DDActual = subs(requiredQ2DD, [state; v], [oldState; vA]);    
+    toc
+    disp('error');
+    tic
+    JbarActual = subs(Jbar,state,oldState);
+    toc
+    disp('jbar');
+    tic
+    JbarPinvActual = pinv(JbarActual);
+    toc
+    disp('jbarpinv');
+    tic
+    %Le subs devono stare divise, perch? JbarPinv e v sono simboli 1x1
+    %mentre JbarPinvActual e vA sono matrici (di dimensioni diverse) quindi
+    %non posso creare un vettore colonna che contiene tutte queste cose
+    
+    q2DDActual = subs(requiredQ2DD,{v},{vA});
+    q2DDActual = subs(q2DDActual, state, oldState);
+    q2DDActual = subs(q2DDActual,{JbarPinv},{JbarPinvActual});
+    %NON FUNZIONA! Sostituisce a v ogni elemento di vA, espandendo il
+    %vettore iniziale (requiredq2dd). POSSIBILE SOLUZIONE: istanziare v e
+    %JbarPinv come matrici simboliche e sostituire element-wise.
+    toc
+    disp('q2dd');
+    tic
     q1DDActual = subs(requiredQ1DD, [state; q2DD], [oldState; q2DDActual]);
-    
+    toc
+    disp('q1dd');
+    tic
     tauActual = subs(tauCheck,[state;qDD],[oldState;q1DDActual;q2DDActual]); 
-    
+    toc
+    disp('tau');
+    tic
     for i=1:size(tauActual,1)
         if (tauActual(i) > tauLimit)
             tauActual(i) = tauLimit;
