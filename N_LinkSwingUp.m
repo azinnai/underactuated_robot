@@ -64,9 +64,8 @@ vc3 = Jc3*qD;
 vc4 = Jc4*qD;
 vc5 = Jc5*qD;
 
-syms g0 real;
 
-g = [0;g0];
+g = [0;-9.81];
 U = -m*g'*(pc1 + pc2 + pc3 + pc4 + pc5);  
 
 
@@ -133,6 +132,7 @@ Jdot = [Jdot1;
         Jdot2];
 
 Jbar = J2 -J1*(B11\B12);
+JbarFunc = matlabFunction(Jbar);%%INPUT (q1,q2,q3,q4,q5)
 
 
 
@@ -147,22 +147,26 @@ disp('dopo pinv');
 tic
 %%requiredQ2DD = JbarPinv * (v - Jdot*qD + J1*(B11\(C1 + h1)));
 requiredQ2DD = JbarPinv * (v - Jdot*qD + J1*inv(B11)*(C1 + h1));
+requiredQ2DDFunc = matlabFunction(requiredQ2DD); % JbarPinvActual(1,1),JbarPinvActual(1,2),JbarPinvActual(2,1),JbarPinvActual(2,2),oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),vA(1),vA(2))
 toc
 disp('required q2dd');
 tic
 %requiredQ1DD = -B11\(B12*q2DD_ordered + C1 + h1);
 requiredQ1DD = -inv(B11)*(B12*q2DD_ordered + C1 + h1);
+requiredQ1DDFunc = matlabFunction(requiredQ1DD);
 toc
 disp('required q1dd');
 tic
 
 tauCheck = B21*q1DD_ordered + B22*q2DD_ordered + C2 + h2;
+TauCheckFunc = matlabFunction(tauCheck);
 toc
 disp('taucheck');
 tic
 
 %directQ2DD = (B22 - B21*(B11\B12))\(tau(n_joints_unactive+1:n_joints) + B21*(B11\(C1 + h1)) - C2 - h2);
 directQ2DD = inv(B22 - B21*(inv(B11)*B12))*(tau(n_joints_unactive+1:n_joints) + B21*(inv(B11)*(C1 + h1)) - C2 - h2);
+directQ2DDFunc = matlabFunction(directQ2DD);
 toc
 disp('directq2dd');
 tic
@@ -220,48 +224,19 @@ for t=0:deltaT:totalT
                 taskState(2,1)- goal(2,1)];
     
     vA = goal(:,3) + Kd*(goal(:,2) - taskState(:,2)) + Kp*errorVec;
-    toc
-    disp('error');
-    tic
-    JbarActual = subs(Jbar,state,oldState);
-    toc
-    disp('jbar');
-    tic
+ 
+    JbarActual = JbarFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5));
+
     JbarPinvActual = pinv(JbarActual);
-    toc
-    disp('jbarpinv');
-    tic
-    %Le subs devono stare divise, perch? JbarPinv e v sono simboli 1x1
-    %mentre JbarPinvActual e vA sono matrici (di dimensioni diverse) quindi
-    %non posso creare un vettore colonna che contiene tutte queste cose.
-    %subs NON FUNZIONA! Sostituisce a v ogni elemento di vA, espandendo il
-    %vettore iniziale (requiredq2dd). POSSIBILE SOLUZIONE: istanziare v e
-    %JbarPinv come matrici simboliche e sostituire element-wise.
-    %Non funziona neanche cos?
-    for i = 1:size(v,1)
-        v(i) = vA(i);
-    end
-    for i = 1:size(JbarPinv,1)
-        for j = 1:size(JbarPinv,2)
-            JbarPinv(i,j) =JbarPinvActual(i,j);
-        end
-    end
 
-    q2DDActual = subs(requiredQ2DD, state, oldState);
-    %q2DDActual = subs(requiredQ2DD,{v},{vA});
-    %q2DDActual = subs(q2DDActual,{JbarPinv},{JbarPinvActual});
 
-    toc
-    disp('q2dd');
-    tic
-    q1DDActual = subs(requiredQ1DD, [state; q2DD], [oldState; q2DDActual]);
-    toc
-    disp('q1dd');
-    tic
+    q2DDActual = requiredQ2DDFunc(JbarPinvActual(1,1),JbarPinvActual(1,2),JbarPinvActual(2,1),JbarPinvActual(2,2),oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),vA(1),vA(2));
+
+
+    q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),q2DDActual(1),q2DDActual(2));
+
     tauActual = subs(tauCheck,[state;qDD],[oldState;q1DDActual;q2DDActual]); 
-    toc
-    disp('tau');
-    tic
+
     for i=1:size(tauActual,1)
         if (tauActual(i) > tauLimit)
             tauActual(i) = tauLimit;
@@ -273,15 +248,17 @@ for t=0:deltaT:totalT
     end
     
     if (tauViolated==true)
-      q2DDActual = subs(directQ2DD,[state;tau], [oldState;tauActual]);
-      q1DDActual = subs(requiredQ1DD, [state; q2DD], [oldState; q2DDActual]);
+       disp('tauViolated');
+      q2DDActual = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),tauActual(1),tauActual(2));  
+      q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),q2DDActual(1),q2DDActual(2));
+
 
     end
     
     
    % newState(n_joints+1:n_joints*2) = [oldState(n_joints+1:n_joints+1+n_joints_unactive) + q1DDActual'*deltaT
     %oldState(n_joints+1+n_joints_unactive+1 : n_joints*2) + q2DDActual'*deltaT];
-    newState(n_joints+1:n_joints*2) = oldState(n_joints+1:n_joints*2) + [q1DDActual' q2DDActual']*deltaT; 
+    newState(n_joints+1:n_joints*2) = oldState(n_joints+1:n_joints*2) + [q1DDActual; q2DDActual]*deltaT; 
     
     
                 
@@ -296,7 +273,7 @@ for t=0:deltaT:totalT
     
    % newState(1:n_joints) = [mod(oldState(1:n_joints) + newState(n_joints+1:n_joints+1+n_joints_unactive)*deltaT + 0.5*q1DDActual*deltaT^2, 2*pi);
     %                mod(oldState(2) + newState(4)*deltaT + 0.5*q2DDActual*deltaT^2, 2*pi)];
-    newState(1:n_joints) = mod(oldState(1:n_joints) + newState(n_joints+1:n_joints*2)*deltaT + 0.5*[q1DDActual' q2DDActual']*deltaT^2, 2*pi);
+    newState(1:n_joints) = mod(oldState(1:n_joints) + newState(n_joints+1:n_joints*2)*deltaT + 0.5*[q1DDActual; q2DDActual]*deltaT^2, 2*pi);
     
     
     
@@ -313,10 +290,10 @@ for t=0:deltaT:totalT
   %      newState(2) = -jointLimitQ2;
   %  end
                 
-    oldState = newState;
+    oldState = newState
   
     toc
-    disp('fine simulazione');
+
 end
 
   

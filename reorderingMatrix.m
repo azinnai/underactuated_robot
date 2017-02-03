@@ -4,7 +4,11 @@ function M = reorderingMatrix(T,v)
         error('The matrix and the vector are not compatible!');
         M=0;
     else
-        M = sym('M', size(T));
+        if isa(T,'sym')
+            M = sym('M',size(T));
+        else
+        M = zeros(size(T));
+        end
         m = sum(v(:) == 0);
 
         j=1;
