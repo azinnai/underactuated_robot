@@ -1,11 +1,8 @@
 clear all
 clc
 
-syms q1 q2 q3 q4 q5 q1D q2D q3D q4D q5D q1DD q2DD q3DD q4DD q5DD tau1 tau2 tau3 tau4 tau5 real;
-
-%syms m l I lc real;
-
 tic
+syms q1 q2 q3 q4 q5 q1D q2D q3D q4D q5D q1DD q2DD q3DD q4DD q5DD tau1 tau2 tau3 tau4 tau5 real;
 
 q = [q1;q2;q3;q4;q5];
 qD = [q1D;q2D;q3D;q4D;q5D];
@@ -24,6 +21,9 @@ l = 0.2;
 I = 0.05;
 lc = 0.1;
 
+
+%%%%%%%%%%%%%%%%DYNAMIC MODEL COMPUTATION
+%Compact definitions
 s1 = sin(q1);
 s2 = sin(q2);
 s3 = sin(q3);
@@ -33,7 +33,6 @@ s12 = sin(q1+q2);
 s123 = sin(q1+q2+q3);
 s1234 = sin(q1+q2+q3+q4);
 s12345 = sin(q1+q2+q3+q4+q5); 
-
 
 c1 = cos(q1);
 c2 = cos(q2);
@@ -70,8 +69,7 @@ U = -m*g'*(pc1 + pc2 + pc3 + pc4 + pc5);
 
 
 Tv = 0.5*m*(vc1'*vc1 + vc2'*vc2 + vc3'*vc3 + vc4'*vc4 + vc5'*vc5);
-%Tc = 0.5*m*(vc1'*vc1 + vc2'*vc2);
-Tomega = simplify(0.5*I*omega'*omega);
+Tomega = simplify(0.5*I*(omega'*omega));
 
 T = Tv + Tomega;
 B = Bmatrix(T,n_joints);
@@ -97,21 +95,6 @@ q2D_ordered = qD_ordered(n_joints_unactive+1:n_joints);
 q1_ordered = q_ordered(1:n_joints_unactive);
 q2_ordered = q_ordered(n_joints_unactive+1:n_joints);
 
-
-comPos = (pc1 + pc2 + pc3 + pc4 + pc5)/n_joints;
-comAngle = atan2(comPos(2),comPos(1));
-comLength = norm(comPos);
-task = [comAngle; comLength];
-
-J = jacobian(task, q_ordered);
-toc
-disp('computed jacobian');
-tic
-%J = simplify(J);
-
-J1 = J(:,1:n_joints_unactive);
-J2 = J(:,n_joints_unactive+1:n_joints);
-
 B11 = B(1:n_joints_unactive,1:n_joints_unactive);
 B12 = B(1:n_joints_unactive,n_joints_unactive+1:n_joints);
 B21 = B(n_joints_unactive+1:n_joints,1:n_joints_unactive);
@@ -124,8 +107,19 @@ h1 = h(1:n_joints_unactive);
 h2 = h(n_joints_unactive+1:n_joints);
 
 
+%%%%%%%%%%%%%%%%TASK TERMS COMPUTATION
+comPos = (pc1 + pc2 + pc3 + pc4 + pc5)/n_joints;
+comAngle = atan2(comPos(2),comPos(1));
+comLength = norm(comPos);
+task = [comAngle; comLength];
 
-%Jdot = qD_ordered'*jacobian([J(1,:);J(2,:)],q_ordered);
+J = jacobian(task, q_ordered);
+%J = simplify(J);
+
+J1 = J(:,1:n_joints_unactive);
+J2 = J(:,n_joints_unactive+1:n_joints);
+
+
 Jdot1 = qD_ordered'*jacobian(J(1,:),q_ordered);
 Jdot2 = qD_ordered'*jacobian(J(2,:),q_ordered);
 Jdot = [Jdot1;
@@ -135,42 +129,30 @@ Jbar = J2 -J1*(B11\B12);
 JbarFunc = matlabFunction(Jbar);%%INPUT (q1,q2,q3,q4,q5)
 
 
-
-%JbarPinv = pinv(Jbar);
-%pseudoPt1 = inv(Jbar*Jbar');
-%JbarPinv = Jbar'*pseudoPt1;
 JbarPinv = sym('Jbp',size(Jbar')); %JbarPinv ha dimensioni di Jbar trasposta
 v = sym('v',size(task));
 taskDot = J * qD;
-toc
-disp('dopo pinv');
-tic
+
 %%requiredQ2DD = JbarPinv * (v - Jdot*qD + J1*(B11\(C1 + h1)));
 requiredQ2DD = JbarPinv * (v - Jdot*qD + J1*inv(B11)*(C1 + h1));
 requiredQ2DDFunc = matlabFunction(requiredQ2DD); % JbarPinvActual(1,1),JbarPinvActual(1,2),JbarPinvActual(2,1),JbarPinvActual(2,2),oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),vA(1),vA(2))
-toc
-disp('required q2dd');
-tic
+
 %requiredQ1DD = -B11\(B12*q2DD_ordered + C1 + h1);
 requiredQ1DD = -inv(B11)*(B12*q2DD_ordered + C1 + h1);
 requiredQ1DDFunc = matlabFunction(requiredQ1DD);
-toc
-disp('required q1dd');
-tic
+
 
 tauCheck = B21*q1DD_ordered + B22*q2DD_ordered + C2 + h2;
 TauCheckFunc = matlabFunction(tauCheck);
-toc
-disp('taucheck');
-tic
+
 
 %directQ2DD = (B22 - B21*(B11\B12))\(tau(n_joints_unactive+1:n_joints) + B21*(B11\(C1 + h1)) - C2 - h2);
-directQ2DD = inv(B22 - B21*(inv(B11)*B12))*(tau(n_joints_unactive+1:n_joints) + B21*(inv(B11)*(C1 + h1)) - C2 - h2);
+directQ2DD = inv( - B21*inv(B11)*B12 + B22)*(tau(n_joints_unactive+1:n_joints) + B21*inv(B11)*(C1 + h1) - C2-h2);
 directQ2DDFunc = matlabFunction(directQ2DD);
-toc
-disp('directq2dd');
-tic
 
+
+
+%%%%%%%%%%%%%%%%INITIAL STATE AND GOAL
 state = [q_ordered;qD_ordered];
 %Se i giunti iniziali sono in [-pi/2 0 0 0 0] c'? una divisione per zero in
 %taskDot
@@ -185,8 +167,8 @@ goal = [pi/2 0 0;
 Kd = 1;
 Kp = 1;
 deltaT = 0.15;
-totalT = 30;
-saturationQD = 1;
+totalT = 0;
+saturationQD = 5;
 tauLimit = 2;
 jointLimitQ = pi;
 
@@ -196,6 +178,8 @@ taskStorage = zeros(totalIterations,size(task,1)*2);
 indexStorage = 0;
 toc
 disp('inizio simulazione');
+
+%%%%%%%%%%%%%%%%CONTROL LOOP
 for t=0:deltaT:totalT
     tic
     if (mod(t,1)==0)
@@ -232,11 +216,15 @@ for t=0:deltaT:totalT
 
     q2DDActual = requiredQ2DDFunc(JbarPinvActual(1,1),JbarPinvActual(1,2),JbarPinvActual(2,1),JbarPinvActual(2,2),oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),vA(1),vA(2));
 
-
     q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),q2DDActual(1),q2DDActual(2));
 
     tauActual = subs(tauCheck,[state;qDD],[oldState;q1DDActual;q2DDActual]); 
 
+    showQ1DD = vpa(q1DDActual,3)
+    showvpa(q2DDActual,3)
+    qCheck =  directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),tauActual(1),tauActual(2));  
+    vpa(qCheck,3)
+    
     for i=1:size(tauActual,1)
         if (tauActual(i) > tauLimit)
             tauActual(i) = tauLimit;
@@ -246,7 +234,8 @@ for t=0:deltaT:totalT
             tauViolated = true;
         end
     end
-    
+
+
     if (tauViolated==true)
        disp('tauViolated');
       q2DDActual = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),tauActual(1),tauActual(2));  
@@ -258,16 +247,19 @@ for t=0:deltaT:totalT
     
    % newState(n_joints+1:n_joints*2) = [oldState(n_joints+1:n_joints+1+n_joints_unactive) + q1DDActual'*deltaT
     %oldState(n_joints+1+n_joints_unactive+1 : n_joints*2) + q2DDActual'*deltaT];
+    vpa(q1DDActual,3)
+    vpa(q2DDActual,3)
     newState(n_joints+1:n_joints*2) = oldState(n_joints+1:n_joints*2) + [q1DDActual; q2DDActual]*deltaT; 
     
     
-                
-    %if (newState(4)> saturationQ2D)
-    %    newState(4) = saturationQ2D;
-    %    
-    %elseif (newState(4)< - saturationQ2D)
-    %        newState(4) = - saturationQ2D;
-    %end
+   for i=1:(n_joints-n_joints_unactive)             
+    if (newState(n_joints + n_joints_unactive + i)> saturationQD)
+        newState(n_joints + n_joints_unactive + i) = saturationQD;
+        
+    elseif (newState(n_joints + n_joints_unactive + i)< - saturationQD)
+            newState(n_joints + n_joints_unactive + i) = - saturationQD;
+    end
+   end
     
 
     

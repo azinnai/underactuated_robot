@@ -1,6 +1,7 @@
 clear all
 clc
 
+
 syms q1 q2 q1D q2D q1DD q2DD v tau real;
 
 %Robot parameters
@@ -43,21 +44,30 @@ comAngle = atan2(comPos(2), comPos(1));
 %Jacobian Definition
 J = simplify(jacobian(comAngle, q));
 
-Jbar = simplify(J(2) - J(1)*M(1,1)\M(1,2));
+%Jbar = simplify(J(2) - J(1)*M(1,1)\M(1,2));
+Jbar = J(2) - J(1)*inv(M(1,1))*M(1,2);
 JbarPinv = pinv(Jbar);
 
-Jdot = [ 0, -(lc2*sin(q2)*(l1 + lc1)*q2D*(l1^2 + 2*l1*lc1 + lc1^2 - lc2^2))/(l1^2 + 2*l1*lc1 + 2*cos(q2)*l1*lc2 + lc1^2 + 2*cos(q2)*lc1*lc2 + lc2^2)^2];
+Jdot = qD' * jacobian(J,q);
+%Jdot = [ 0, -(lc2*sin(q2)*(l1 + lc1)*q2D*(l1^2 + 2*l1*lc1 + lc1^2 - lc2^2))/(l1^2 + 2*l1*lc1 + 2*cos(q2)*l1*lc2 + lc1^2 + 2*cos(q2)*lc1*lc2 + lc2^2)^2];
 
 comAngleDot = J * qD;
 
 %Acceleration and torque equations
-requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*M(1,1)\(C(1) + g(1)));
+%requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*M(1,1)\(C(1) + g(1)));
+requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*inv(M(1,1))*(C(1) + g(1)));
+requiredQ2DDFunc = matlabFunction(requiredQ2DD);% @(q1,q2,q1D,q2D,v)
 
-requiredQ1DD = -M(1,1)\(M(1,2)*q2DD + C(1) + g(1));
+%requiredQ1DD = -M(1,1)\(M(1,2)*q2DD + C(1) + g(1));
+requiredQ1DD = -inv(M(1,1))*(M(1,2)*q2DD + C(1) + g(1));
+requiredQ1DDFunc = matlabFunction(requiredQ1DD); %    @(q1,q2,q1D,q2D,q2DD)
 
 tauCheck = M(2,1)*q1DD + M(2,2)*q2DD + C(2) + g(2);
+tauCheckFunc = matlabFunction(tauCheck); % @(q1,q2,q1D,q1DD,q2DD)
 
-directQ2DD = (M(2,2)-M(2,1)*M(1,1)\M(1,2))\(tau +M(2,1)*M(1,1)\(C(1)+g(1)) - C(2) - g(2));
+directQ2DD = inv(-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2))*(tau + M(2,1)*inv(M(1,1))*(C(1)+g(1))- C(2)-g(2));
+%directQ2DD = (-M(2,1)*(M(1,1))\M(1,2) + M(2,2))\(tau + M(2,1)*(M(1,1))\(C(1)+g(1))- C(2)-g(2));
+directQ2DDFunc = matlabFunction(directQ2DD); % @(q1,q2,q1D,q2D,tau)
 
 state = [q ;qD];
 oldState = [-pi/2 0 0 0]';
@@ -66,14 +76,17 @@ newState = [0 0 0 0]';
 %0 refers to the desired acceleration
 goal = [pi/2 0 0];
 
-Kd = 1 ;
-Kp = 1;
+Kd = 3 ;
+Kp = 2;
 deltaT = 0.15;
-totalT = 25;
+totalT = 0.15;
 saturationQ2D = 1;
 tauLimit = 2;
 jointLimitQ1 = pi;
 jointLimitQ2 = pi;
+
+
+
 
 totalIterations = ceil(totalT/deltaT);
 stateStorage = zeros(totalIterations,2);
@@ -85,6 +98,7 @@ for t=0:deltaT:totalT
         disp(t);
     end
     
+    oldState
     tauViolated = false;
     
     indexStorage = indexStorage+1;
@@ -96,8 +110,6 @@ for t=0:deltaT:totalT
     taskStorage(indexStorage) = taskState(1);
     
     
-    
-    
     actualMat = [cos(taskState(1)), - sin(taskState(1)); sin(taskState(1)), cos(taskState(1))];
     referenceMat = [cos(goal(1)), - sin(goal(1)); sin(goal(1)), cos(goal(1))];
     errorMat = (actualMat)\referenceMat;
@@ -105,10 +117,14 @@ for t=0:deltaT:totalT
     
     vA = goal(3) + Kd*(goal(2) - taskState(2)) + Kp*errorVec;
 
-    q2DDActual = subs(requiredQ2DD, [state; v], [oldState; vA]);    
-    q1DDActual = subs(requiredQ1DD, [state; q2DD], [oldState; q2DDActual]);
-    
-    tauActual = vpa(subs(tauCheck,[state;qDD],[oldState;q1DDActual;q2DDActual]),4) 
+    q2DDActual = requiredQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),vA)
+
+    q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual);
+
+
+    tauActual = tauCheckFunc(oldState(1),oldState(2),oldState(4),q1DDActual,q2DDActual);
+
+    show2 = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual)
     
     if (tauActual > tauLimit)
         tauActual
@@ -122,8 +138,8 @@ for t=0:deltaT:totalT
         tauViolated = true;
     end
     if (tauViolated==true)
-      q2DDActual = subs(directQ2DD,[state;tau], [oldState;tauActual]);
-      q1DDActual = subs(requiredQ1DD, [state; q2DD], [oldState; q2DDActual]);
+      q2DDActual = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual);
+      q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual);
      
     end
     
@@ -187,6 +203,10 @@ task_text = text(ax.XLim(1),ax.YLim(2),'');
 task_text.FontSize = 14;
 task_text.FontWeight = 'bold';
 
+time_text = text(ax.XLim(1),ax.YLim(1),'');
+time_text.FontSize = 14;
+time_text.FontWeight = 'bold';
+
 link1 = line;
 link1.LineWidth = 2.5;
 link1.Color = 'b';
@@ -206,6 +226,7 @@ for i=1:size(stateStorage,1)
     set(link2,'XData',[x1(1),x2(1)], 'YData',[x1(2),x2(2)])
     
     task_text.String = strcat( mat2str(double(vpa(taskStorage(i),3)),3),' COM Angle');
+    time_text.String = mat2str(i*deltaT);
     
     drawnow;
     
@@ -213,6 +234,15 @@ for i=1:size(stateStorage,1)
     
     
 end
+
+
+timeStorage = linspace(0,totalT,totalIterations);
+
+figure
+title('COM angle evolution');
+xlabel('Time');
+ylabel('COM angle');
+plot(timeStorage,taskStorage);
 
 
 
