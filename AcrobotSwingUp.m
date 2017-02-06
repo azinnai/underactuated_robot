@@ -5,20 +5,20 @@ clc
 syms q1 q2 q1D q2D q1DD q2DD v tau real;
 
 %Robot parameters
-m1 = 0.2;
-m2 = 0.2;
-I1 = 0.05;
-I2 = 0.05;
-lc1 = 0.1;
-lc2 = 0.1;
-l1 = 0.2;
-l2 = 0.2;
+m1 = 1/5;
+m2 = 1/5;
+I1 = 1/20;
+I2 = 1/20;
+lc1 = 1/10;
+lc2 = 1/10;
+l1 = 1/5;
+l2 = 1/5;
 
 q = [q1;q2];
 qD = [q1D;q2D];
 qDD = [q1DD;q2DD];
 
-g0 = -9.81;
+g0 = -981/100;
 
 %Robot dynamic parameters
 a1 = m1*lc1^2 + I1 + I2 + m2*(l1^2 + lc2^2);
@@ -44,8 +44,8 @@ comAngle = atan2(comPos(2), comPos(1));
 %Jacobian Definition
 J = simplify(jacobian(comAngle, q));
 
-%Jbar = simplify(J(2) - J(1)*M(1,1)\M(1,2));
-Jbar = J(2) - J(1)*inv(M(1,1))*M(1,2);
+Jbar = J(2) - J(1)*(M(1,1)\M(1,2));
+%Jbar = J(2) - J(1)*inv(M(1,1))*M(1,2);
 JbarPinv = pinv(Jbar);
 
 Jdot = qD' * jacobian(J,q);
@@ -54,19 +54,19 @@ Jdot = qD' * jacobian(J,q);
 comAngleDot = J * qD;
 
 %Acceleration and torque equations
-%requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*M(1,1)\(C(1) + g(1)));
-requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*inv(M(1,1))*(C(1) + g(1)));
+requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*(M(1,1)\(C(1) + g(1))));
+%requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*inv(M(1,1))*(C(1) + g(1)));
 requiredQ2DDFunc = matlabFunction(requiredQ2DD);% @(q1,q2,q1D,q2D,v)
 
-%requiredQ1DD = -M(1,1)\(M(1,2)*q2DD + C(1) + g(1));
-requiredQ1DD = -inv(M(1,1))*(M(1,2)*q2DD + C(1) + g(1));
+requiredQ1DD = -M(1,1)\(M(1,2)*q2DD + C(1) + g(1));
+%requiredQ1DD = -inv(M(1,1))*(M(1,2)*q2DD + C(1) + g(1));
 requiredQ1DDFunc = matlabFunction(requiredQ1DD); %    @(q1,q2,q1D,q2D,q2DD)
 
 tauCheck = M(2,1)*q1DD + M(2,2)*q2DD + C(2) + g(2);
 tauCheckFunc = matlabFunction(tauCheck); % @(q1,q2,q1D,q1DD,q2DD)
 
-directQ2DD = inv(-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2))*(tau + M(2,1)*inv(M(1,1))*(C(1)+g(1))- C(2)-g(2));
-%directQ2DD = (-M(2,1)*(M(1,1))\M(1,2) + M(2,2))\(tau + M(2,1)*(M(1,1))\(C(1)+g(1))- C(2)-g(2));
+directQ2DD = (-M(2,1)*(M(1,1)\M(1,2)) + M(2,2))\(tau + M(2,1)*(M(1,1)\(C(1)+g(1)))- C(2)-g(2));
+%directQ2DD = inv(-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2))*(tau + M(2,1)*inv(M(1,1))*(C(1)+g(1))- C(2)-g(2));
 directQ2DDFunc = matlabFunction(directQ2DD); % @(q1,q2,q1D,q2D,tau)
 
 state = [q ;qD];
@@ -78,8 +78,8 @@ goal = [pi/2 0 0];
 
 Kd = 3 ;
 Kp = 2;
-deltaT = 0.15;
-totalT = 0.15;
+deltaT = 15/100;
+totalT = 15;
 saturationQ2D = 1;
 tauLimit = 2;
 jointLimitQ1 = pi;
@@ -98,7 +98,7 @@ for t=0:deltaT:totalT
         disp(t);
     end
     
-    oldState
+ 
     tauViolated = false;
     
     indexStorage = indexStorage+1;
@@ -113,19 +113,22 @@ for t=0:deltaT:totalT
     actualMat = [cos(taskState(1)), - sin(taskState(1)); sin(taskState(1)), cos(taskState(1))];
     referenceMat = [cos(goal(1)), - sin(goal(1)); sin(goal(1)), cos(goal(1))];
     errorMat = (actualMat)\referenceMat;
-    errorVec = vpa(atan2(errorMat(2,1),errorMat(1,1)),3);
+    errorVec = atan2(errorMat(2,1),errorMat(1,1));
     
     vA = goal(3) + Kd*(goal(2) - taskState(2)) + Kp*errorVec;
 
-    q2DDActual = requiredQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),vA)
-
+    q2DDActual = requiredQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),vA);
+   % show1 = vpa(q2DDActual)
     q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual);
 
 
     tauActual = tauCheckFunc(oldState(1),oldState(2),oldState(4),q1DDActual,q2DDActual);
-
-    show2 = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual)
-    
+    %inverso = vpa(subs((-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2)),q2,oldState(2)))
+    % inverso2 = vpa(subs((-M(2,1)*((M(1,1))\M(1,2)) + M(2,2)),q2,oldState(2)))
+    %show2 = vpa(directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual))
+    % q2DDActual = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual);
+    %  q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual);
+      
     if (tauActual > tauLimit)
         tauActual
         t
@@ -154,20 +157,9 @@ for t=0:deltaT:totalT
             newState(4) = - saturationQ2D;
     end
     
-    
-  
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    newState(1:2) = [mod(oldState(1) + newState(3)*deltaT + 0.5*q1DDActual*deltaT^2, 2*pi);
-                    mod(oldState(2) + newState(4)*deltaT + 0.5*q2DDActual*deltaT^2, 2*pi)];
+
+    newState(1:2) = [mod(oldState(1) + newState(3)*deltaT + (1/2)*q1DDActual*deltaT^2, 2*pi);
+                    mod(oldState(2) + newState(4)*deltaT + (1/2)*q2DDActual*deltaT^2, 2*pi)];
     
   %  if (newState(1)>jointLimitQ1)
   %      newState(1) = jointLimitQ1;
@@ -236,7 +228,7 @@ for i=1:size(stateStorage,1)
 end
 
 
-timeStorage = linspace(0,totalT,totalIterations);
+timeStorage = linspace(0,totalT,totalIterations+1)';
 
 figure
 title('COM angle evolution');

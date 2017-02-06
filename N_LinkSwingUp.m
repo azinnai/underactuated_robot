@@ -1,4 +1,4 @@
-clear all
+%clear all
 clc
 
 tic
@@ -16,10 +16,10 @@ n_joints_unactive = sum(active_joints(:) ==0);
 %n_joints_active = n_joints - n_joints_unactive;
 
 %robot parameters for 5r robots with all equal links
-m = 0.2;
-l = 0.2;
-I = 0.05;
-lc = 0.1;
+m = 1/5;
+l = 1/5;
+I = 1/20;
+lc = 1/10;
 
 
 %%%%%%%%%%%%%%%%DYNAMIC MODEL COMPUTATION
@@ -65,11 +65,11 @@ vc5 = Jc5*qD;
 
 
 g = [0;-9.81];
-U = -m*g'*(pc1 + pc2 + pc3 + pc4 + pc5);  
+U = m*g'*(pc1 + pc2 + pc3 + pc4 + pc5);  
 
 
-Tv = 0.5*m*(vc1'*vc1 + vc2'*vc2 + vc3'*vc3 + vc4'*vc4 + vc5'*vc5);
-Tomega = simplify(0.5*I*(omega'*omega));
+Tv = (1/2)*m*(vc1'*vc1 + vc2'*vc2 + vc3'*vc3 + vc4'*vc4 + vc5'*vc5);
+Tomega = simplify((1/2)*I*(omega'*omega));
 
 T = Tv + Tomega;
 B = Bmatrix(T,n_joints);
@@ -81,7 +81,7 @@ B = reorderingMatrix(B, active_joints);
 C = reorderingMatrix(C, active_joints);
 h = reorderingMatrix(h, active_joints);
 tau = reorderingMatrix(tau, active_joints);
-tau(1:n_joints_unactive) = zeros(n_joints_unactive,1);
+tau2 = tau(n_joints_unactive+1:n_joints,1);
 q_ordered = reorderingMatrix(q, active_joints);
 qD_ordered = reorderingMatrix(qD, active_joints);
 qDD_ordered = reorderingMatrix(qDD, active_joints);
@@ -125,7 +125,8 @@ Jdot2 = qD_ordered'*jacobian(J(2,:),q_ordered);
 Jdot = [Jdot1;
         Jdot2];
 
-Jbar = J2 -J1*(B11\B12);
+%Jbar = J2 -J1*(B11\B12);
+Jbar = J2 - J1*(inv(B11)*B12);
 JbarFunc = matlabFunction(Jbar);%%INPUT (q1,q2,q3,q4,q5)
 
 
@@ -133,7 +134,7 @@ JbarPinv = sym('Jbp',size(Jbar')); %JbarPinv ha dimensioni di Jbar trasposta
 v = sym('v',size(task));
 taskDot = J * qD;
 
-%%requiredQ2DD = JbarPinv * (v - Jdot*qD + J1*(B11\(C1 + h1)));
+%requiredQ2DD = JbarPinv * (v - Jdot*qD + J1*(B11\(C1 + h1)));
 requiredQ2DD = JbarPinv * (v - Jdot*qD + J1*inv(B11)*(C1 + h1));
 requiredQ2DDFunc = matlabFunction(requiredQ2DD); % JbarPinvActual(1,1),JbarPinvActual(1,2),JbarPinvActual(2,1),JbarPinvActual(2,2),oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),vA(1),vA(2))
 
@@ -143,15 +144,15 @@ requiredQ1DDFunc = matlabFunction(requiredQ1DD);
 
 
 tauCheck = B21*q1DD_ordered + B22*q2DD_ordered + C2 + h2;
-TauCheckFunc = matlabFunction(tauCheck);
+tauCheckFunc = matlabFunction(tauCheck);
 
 
-%directQ2DD = (B22 - B21*(B11\B12))\(tau(n_joints_unactive+1:n_joints) + B21*(B11\(C1 + h1)) - C2 - h2);
-directQ2DD = inv( - B21*inv(B11)*B12 + B22)*(tau(n_joints_unactive+1:n_joints) + B21*inv(B11)*(C1 + h1) - C2-h2);
+%directQ2DD = (B22 - B21*(B11\B12))\(tau2 + B21*(B11\(C1 + h1)) - C2 - h2);
+directQ2DD = inv( - B21*inv(B11)*B12 + B22)*(tau2 + B21*inv(B11)*(C1 + h1) - C2-h2);
 directQ2DDFunc = matlabFunction(directQ2DD);
 
 
-
+ 
 %%%%%%%%%%%%%%%%INITIAL STATE AND GOAL
 state = [q_ordered;qD_ordered];
 %Se i giunti iniziali sono in [-pi/2 0 0 0 0] c'? una divisione per zero in
@@ -164,10 +165,10 @@ newState = [0 0 0 0 0 0 0 0 0 0]';
 goal = [pi/2 0 0;
         l*5/2 0 0];
     
-Kd = 1;
+Kd = 3;
 Kp = 1;
-deltaT = 0.15;
-totalT = 0;
+deltaT = 15/100;
+totalT = 10;
 saturationQD = 5;
 tauLimit = 2;
 jointLimitQ = pi;
@@ -218,13 +219,15 @@ for t=0:deltaT:totalT
 
     q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),q2DDActual(1),q2DDActual(2));
 
-    tauActual = subs(tauCheck,[state;qDD],[oldState;q1DDActual;q2DDActual]); 
+    tauActual = tauCheckFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),q1DDActual(1),q1DDActual(2),q1DDActual(3), q2DDActual(1),q2DDActual(2));
+    %tauActual = subs(tauCheck,[state;qDD],[oldState;q1DDActual;q2DDActual]); 
 
-    showQ1DD = vpa(q1DDActual,3)
-    showvpa(q2DDActual,3)
-    qCheck =  directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),tauActual(1),tauActual(2));  
-    vpa(qCheck,3)
+    show1 = q2DDActual;
+    vpa(show1)
     
+    show2 = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),tauActual(1),tauActual(2));
+    vpa(show2)
+
     for i=1:size(tauActual,1)
         if (tauActual(i) > tauLimit)
             tauActual(i) = tauLimit;
@@ -247,8 +250,7 @@ for t=0:deltaT:totalT
     
    % newState(n_joints+1:n_joints*2) = [oldState(n_joints+1:n_joints+1+n_joints_unactive) + q1DDActual'*deltaT
     %oldState(n_joints+1+n_joints_unactive+1 : n_joints*2) + q2DDActual'*deltaT];
-    vpa(q1DDActual,3)
-    vpa(q2DDActual,3)
+
     newState(n_joints+1:n_joints*2) = oldState(n_joints+1:n_joints*2) + [q1DDActual; q2DDActual]*deltaT; 
     
     
@@ -265,7 +267,7 @@ for t=0:deltaT:totalT
     
    % newState(1:n_joints) = [mod(oldState(1:n_joints) + newState(n_joints+1:n_joints+1+n_joints_unactive)*deltaT + 0.5*q1DDActual*deltaT^2, 2*pi);
     %                mod(oldState(2) + newState(4)*deltaT + 0.5*q2DDActual*deltaT^2, 2*pi)];
-    newState(1:n_joints) = mod(oldState(1:n_joints) + newState(n_joints+1:n_joints*2)*deltaT + 0.5*[q1DDActual; q2DDActual]*deltaT^2, 2*pi);
+    newState(1:n_joints) = mod(oldState(1:n_joints) + newState(n_joints+1:n_joints*2)*deltaT + (1/2)*[q1DDActual; q2DDActual]*deltaT^2, 2*pi);
     
     
     
