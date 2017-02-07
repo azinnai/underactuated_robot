@@ -217,8 +217,8 @@ for t=0:deltaT:totalT
 
     JbarPinvActual = pinv(JbarActual);
 
-
-    q2DDActual = requiredQ2DDFunc(JbarPinvActual(1,1),JbarPinvActual(1,2),JbarPinvActual(2,1),JbarPinvActual(2,2),oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),vA(1),vA(2));
+    q2DDActual = JbarPinvActual * (vA - Jdot*qD + J1*inv(B11)*(C1 + h1));
+    %q2DDActual = requiredQ2DDFunc(JbarPinvActual(1,1),JbarPinvActual(1,2),JbarPinvActual(2,1),JbarPinvActual(2,2),oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),vA(1),vA(2));
 
     q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),q2DDActual(1),q2DDActual(2));
 

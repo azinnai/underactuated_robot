@@ -72,6 +72,9 @@ tauCheckFunc = matlabFunction(tauCheck,'Optimize',false); % @(q1,q2,q1D,q1DD,q2D
 directQ2DD = inv(-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2))*(tau + M(2,1)*inv(M(1,1))*(C(1)+g(1))- C(2)-g(2));
 directQ2DDFunc = matlabFunction(directQ2DD,'Optimize',false); % @(q1,q2,q1D,q2D,tau)
 
+
+
+
 state = [q ;qD];
 oldState = [-pi/2 0 0 0]';
 newState = [0 0 0 0]';
@@ -82,7 +85,7 @@ goal = [pi/2 0 0];
 Kd = 3 ;
 Kp = 2;
 deltaT = 15/100;
-totalT = 15;
+totalT = 0;
 saturationQ2D = 1;
 tauLimit = 2;
 jointLimitQ1 = pi;
@@ -113,9 +116,7 @@ for t=0:deltaT:totalT
     stateStorage(indexStorage,:) = oldState(1:2);
     taskStorage(indexStorage) = taskState(1);
     
-    
-    Jsubs = subs(Jbar,state,oldState);
-    rango = rank(Jsubs)
+
     
     
     actualMat = [cos(taskState(1)), - sin(taskState(1)); sin(taskState(1)), cos(taskState(1))];
@@ -135,8 +136,8 @@ for t=0:deltaT:totalT
     %inverso = vpa(subs((-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2)),q2,oldState(2)))
     % inverso2 = vpa(subs((-M(2,1)*((M(1,1))\M(1,2)) + M(2,2)),q2,oldState(2)))
     %show2 = vpa(directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual))
-     q2DDActual = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual)
-     q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual)
+    q2DDActual = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual)
+    q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual)
       
       
       

@@ -31,6 +31,9 @@ tauLimit = 2;
 jointLimitQ1 = pi;
 jointLimitQ2 = pi;
 
+syms q1 q2 real;
+Iacobiana = jacobian(atan2((lc1*sin(q1) + l1*sin(q1) + lc2*sin(q1+q2))/2,(lc1*cos(q1) + l1*cos(q1) + lc2*cos(q1+q2))/2), [q1;q2]);
+iacobFunc = matlabFunction(Iacobiana)
 
 
 
@@ -73,7 +76,9 @@ comAngle = atan2(comPos(2), comPos(1));
 
 
 %Jacobian Definition
-J = [ 1, (3*cos(oldState(2)) + 1)/(6*cos(oldState(2)) + 10)];
+
+J = iacobFunc(oldState(1),oldState(2));
+%J = [ 1, (3*cos(oldState(2)) + 1)/(6*cos(oldState(2)) + 10)];
  
 Jbar = J(2) - J(1)*inv(M(1,1))*M(1,2);
 JbarPinv = pinv(Jbar);
