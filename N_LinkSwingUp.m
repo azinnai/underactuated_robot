@@ -1,6 +1,6 @@
-%clear all
+clear all
 clc
-
+disp('Computing dynamic model,task terms and compilating matlabFunctions ...')
 tic
 syms q1 q2 q3 q4 q5 q1D q2D q3D q4D q5D q1DD q2DD q3DD q4DD q5DD tau1 tau2 tau3 tau4 tau5 real;
 
@@ -111,9 +111,9 @@ h2 = h(n_joints_unactive+1:n_joints);
 comPos = (pc1 + pc2 + pc3 + pc4 + pc5)/n_joints;
 comAngle = atan2(comPos(2),comPos(1));
 comLength = norm(comPos);
-task = [comAngle; comLength];
+task = [comAngle; comLength]
 
-J = jacobian(task, q_ordered);
+J = jacobian(task, q_ordered)
 %J = simplify(J);
 
 J1 = J(:,1:n_joints_unactive);
@@ -151,6 +151,9 @@ tauCheckFunc = matlabFunction(tauCheck);
 directQ2DD = inv( - B21*inv(B11)*B12 + B22)*(tau2 + B21*inv(B11)*(C1 + h1) - C2-h2);
 directQ2DDFunc = matlabFunction(directQ2DD);
 
+matrixCheck = ( - B21*inv(B11)*B12 + B22);
+matrixCheckFunc = matlabFunction(matrixCheck);
+
 
  
 %%%%%%%%%%%%%%%%INITIAL STATE AND GOAL
@@ -178,7 +181,7 @@ stateStorage = zeros(totalIterations,n_joints*2);
 taskStorage = zeros(totalIterations,size(task,1)*2);
 indexStorage = 0;
 toc
-disp('inizio simulazione');
+disp('Beginning simulation loop');
 
 %%%%%%%%%%%%%%%%CONTROL LOOP
 for t=0:deltaT:totalT
@@ -227,6 +230,8 @@ for t=0:deltaT:totalT
     
     show2 = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),oldState(5),oldState(6),oldState(7),oldState(8),oldState(9),oldState(10),tauActual(1),tauActual(2));
     vpa(show2)
+    
+    show3 = vpa(cond(matrixCheckFunc(oldState(2),oldState(3),oldState(4),oldState(5))))
 
     for i=1:size(tauActual,1)
         if (tauActual(i) > tauLimit)

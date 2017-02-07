@@ -39,35 +39,38 @@ comPos = [(lc1*cos(q1) + l1*cos(q1) + lc2*cos(q1+q2))/2;
     (lc1*sin(q1) + l1*sin(q1) + lc2*sin(q1+q2))/2];
 
 comAngle = atan2(comPos(2), comPos(1));
+comAngleFunc = matlabFunction(comAngle,'Optimize',false);%@(q1,q2)
 
 
 %Jacobian Definition
-J = simplify(jacobian(comAngle, q));
+J = simplify(jacobian(comAngle, q))
 
-Jbar = J(2) - J(1)*(M(1,1)\M(1,2));
-%Jbar = J(2) - J(1)*inv(M(1,1))*M(1,2);
+%Jbar = J(2) - J(1)*(M(1,1)\M(1,2));
+Jbar = J(2) - J(1)*inv(M(1,1))*M(1,2);
 JbarPinv = pinv(Jbar);
 
 Jdot = qD' * jacobian(J,q);
 %Jdot = [ 0, -(lc2*sin(q2)*(l1 + lc1)*q2D*(l1^2 + 2*l1*lc1 + lc1^2 - lc2^2))/(l1^2 + 2*l1*lc1 + 2*cos(q2)*l1*lc2 + lc1^2 + 2*cos(q2)*lc1*lc2 + lc2^2)^2];
 
 comAngleDot = J * qD;
+comAngleDotFunc = matlabFunction(comAngleDot,'Optimize',false);%@(q2,q1D,q2D)
 
 %Acceleration and torque equations
-requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*(M(1,1)\(C(1) + g(1))));
-%requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*inv(M(1,1))*(C(1) + g(1)));
-requiredQ2DDFunc = matlabFunction(requiredQ2DD);% @(q1,q2,q1D,q2D,v)
+%requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*(M(1,1)\(C(1) + g(1))));
+requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*inv(M(1,1))*(C(1) + g(1)));
+requiredQ2DDFunc = matlabFunction(requiredQ2DD,'Optimize',false);% @(q1,q2,q1D,q2D,v)
 
-requiredQ1DD = -M(1,1)\(M(1,2)*q2DD + C(1) + g(1));
-%requiredQ1DD = -inv(M(1,1))*(M(1,2)*q2DD + C(1) + g(1));
-requiredQ1DDFunc = matlabFunction(requiredQ1DD); %    @(q1,q2,q1D,q2D,q2DD)
+%requiredQ1DD = -M(1,1)\(M(1,2)*q2DD + C(1) + g(1));
+requiredQ1DD = -inv(M(1,1))*(M(1,2)*q2DD + C(1) + g(1));
+requiredQ1DDFunc = matlabFunction(requiredQ1DD,'Optimize',false); %    @(q1,q2,q1D,q2D,q2DD)
 
 tauCheck = M(2,1)*q1DD + M(2,2)*q2DD + C(2) + g(2);
-tauCheckFunc = matlabFunction(tauCheck); % @(q1,q2,q1D,q1DD,q2DD)
+tauCheckFunc = matlabFunction(tauCheck,'Optimize',false); % @(q1,q2,q1D,q1DD,q2DD)
 
-directQ2DD = (-M(2,1)*(M(1,1)\M(1,2)) + M(2,2))\(tau + M(2,1)*(M(1,1)\(C(1)+g(1)))- C(2)-g(2));
-%directQ2DD = inv(-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2))*(tau + M(2,1)*inv(M(1,1))*(C(1)+g(1))- C(2)-g(2));
-directQ2DDFunc = matlabFunction(directQ2DD); % @(q1,q2,q1D,q2D,tau)
+
+%directQ2DD = (-M(2,1)*(M(1,1)\M(1,2)) + M(2,2))\(tau + M(2,1)*(M(1,1)\(C(1)+g(1)))- C(2)-g(2));
+directQ2DD = inv(-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2))*(tau + M(2,1)*inv(M(1,1))*(C(1)+g(1))- C(2)-g(2));
+directQ2DDFunc = matlabFunction(directQ2DD,'Optimize',false); % @(q1,q2,q1D,q2D,tau)
 
 state = [q ;qD];
 oldState = [-pi/2 0 0 0]';
@@ -90,6 +93,7 @@ jointLimitQ2 = pi;
 
 totalIterations = ceil(totalT/deltaT);
 stateStorage = zeros(totalIterations,2);
+stateStorage2 = zeros(totalIterations,6);
 taskStorage = zeros(totalIterations,1);
 indexStorage = 0;
 
@@ -103,11 +107,15 @@ for t=0:deltaT:totalT
     
     indexStorage = indexStorage+1;
     
-    taskState = [subs(comAngle,state(1:2), oldState(1:2)) subs(comAngleDot,state, oldState) 0];
+    taskState = [comAngleFunc(oldState(1),oldState(2)) comAngleDotFunc(oldState(2),oldState(3),oldState(4)) 0];
   
     
     stateStorage(indexStorage,:) = oldState(1:2);
     taskStorage(indexStorage) = taskState(1);
+    
+    
+    Jsubs = subs(Jbar,state,oldState);
+    rango = rank(Jsubs)
     
     
     actualMat = [cos(taskState(1)), - sin(taskState(1)); sin(taskState(1)), cos(taskState(1))];
@@ -117,17 +125,20 @@ for t=0:deltaT:totalT
     
     vA = goal(3) + Kd*(goal(2) - taskState(2)) + Kp*errorVec;
 
-    q2DDActual = requiredQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),vA);
-   % show1 = vpa(q2DDActual)
-    q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual);
+    q2DDActual = requiredQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),vA)
+    q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual)
 
 
+    stateStorage2(indexStorage,:) = [oldState', q1DDActual,q2DDActual];
     tauActual = tauCheckFunc(oldState(1),oldState(2),oldState(4),q1DDActual,q2DDActual);
+
     %inverso = vpa(subs((-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2)),q2,oldState(2)))
     % inverso2 = vpa(subs((-M(2,1)*((M(1,1))\M(1,2)) + M(2,2)),q2,oldState(2)))
     %show2 = vpa(directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual))
-    % q2DDActual = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual);
-    %  q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual);
+     q2DDActual = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual)
+     q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual)
+      
+      
       
     if (tauActual > tauLimit)
         tauActual
