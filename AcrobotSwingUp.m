@@ -18,166 +18,130 @@ q = [q1;q2];
 qD = [q1D;q2D];
 qDD = [q1DD;q2DD];
 
-g0 = -981/100;
+g = 981/100;
 
 %Robot dynamic parameters
-a1 = m1*lc1^2 + I1 + I2 + m2*(l1^2 + lc2^2);
-a2 = m2*l1*lc2;
-a3 = m2*lc2^2 + I2;
 
-M = [a1 + 2*a2*cos(q2), a3 + a2*cos(q2);
-    a3 + a2*cos(q2), a3];
-C = [-a2*sin(q2)*(q2D^2+2*q1D*q2D);
-    a2*sin(q2)*q1D^2];
+M = [m1*lc1^2+I1+m2*(l1^2+lc2^2+2*l1*lc2*cos(q2))+I2, m2*(lc2^2+l1*lc2*cos(q2))+I2; 
+    m2*(lc2^2+l1*lc2*cos(q2))+I2, m2*lc2^2+I2];
 
-g = g0*[(m1*lc1 + m2*l1)*cos(q1) + m2*lc2*cos(q1+q2);
-        m2*lc2*cos(q1+q2)];
+C = [m2*l1*lc2*sin(q2)*(-q2D^2-2*q1D*q2D);
+     m2*l1*lc2*sin(q2)*q1D^2];
 
-    
-%Task space definition    
-comPos = [(lc1*cos(q1) + l1*cos(q1) + lc2*cos(q1+q2))/2;
-    (lc1*sin(q1) + l1*sin(q1) + lc2*sin(q1+q2))/2];
+G = [m1*lc1*g*cos(q1)+m2*g*(lc2*cos(q1+q2)+l1*cos(q1));
+    m2*g*lc2*cos(q1+q2)];
 
-comAngle = atan2(comPos(2), comPos(1));
+pc1 = [lc1*cos(q1);
+        lc1*sin(q1)];
+pc2 = [l1*cos(q1)+lc2*cos(q1+q2);
+        l1*sin(q1)+lc2*sin(q1+q2)];
+comPos = (pc1+pc2)/2;
+
+comAngle = atan2(comPos(2),comPos(1));
+comAngleFunc = matlabFunction(comAngle,'Vars',q);
 
 
-%Jacobian Definition
-J = simplify(jacobian(comAngle, q));
+J = jacobian(comAngle,q);
+J1Func = matlabFunction(J(1),'Vars',q);
+J2Func = matlabFunction(J(2),'Vars',q);
 
-Jbar = J(2) - J(1)*(M(1,1)\M(1,2));
-%Jbar = J(2) - J(1)*inv(M(1,1))*M(1,2);
+comAngleD = J*qD;
+comAngleDFunc = matlabFunction(comAngleD,'Vars',[q;qD]);
+
+Jbar = J(2)-J(1)*inv(M(1,1))*M(1,2);
+JbarFunc = matlabFunction(Jbar,'Vars',q);
 JbarPinv = pinv(Jbar);
+%JbarPinvFunc = matlabFunction(JbarPinv,'Vars',q);
 
-Jdot = qD' * jacobian(J,q);
-%Jdot = [ 0, -(lc2*sin(q2)*(l1 + lc1)*q2D*(l1^2 + 2*l1*lc1 + lc1^2 - lc2^2))/(l1^2 + 2*l1*lc1 + 2*cos(q2)*l1*lc2 + lc1^2 + 2*cos(q2)*lc1*lc2 + lc2^2)^2];
+Jdot = (jacobian(J)*qD)';
 
-comAngleDot = J * qD;
+requiredQ2DD = JbarPinv*(v-Jdot*qD+J(1)*inv(M(1,1))*(C(1)+G(1)));
+requiredQ2DDFunc = matlabFunction(requiredQ2DD,'Vars',[q;qD;v]);
+requiredQ1DD = -inv(M(1,1))*(M(1,2)*q2DD+C(1)+G(1));
+requiredQ1DDFunc = matlabFunction(requiredQ1DD,'Vars',[q;qD;q2DD]);
 
-%Acceleration and torque equations
-requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*(M(1,1)\(C(1) + g(1))));
-%requiredQ2DD = JbarPinv * (v -Jdot*qD + J(1)*inv(M(1,1))*(C(1) + g(1)));
-requiredQ2DDFunc = matlabFunction(requiredQ2DD);% @(q1,q2,q1D,q2D,v)
+tauCheck = M(2,1)*q1DD+M(2,2)*q2DD+C(2)+G(2);
+tauCheckFunc = matlabFunction(tauCheck,'Vars',[q;qD;qDD]);
 
-requiredQ1DD = -M(1,1)\(M(1,2)*q2DD + C(1) + g(1));
-%requiredQ1DD = -inv(M(1,1))*(M(1,2)*q2DD + C(1) + g(1));
-requiredQ1DDFunc = matlabFunction(requiredQ1DD); %    @(q1,q2,q1D,q2D,q2DD)
+directQ2DD = inv(-M(2,1)*inv(M(1,1))*M(1,2)+M(2,2))*(tau-M(2,1)*inv(M(1,1))*(C(1)+G(1))+C(2)+G(2));
+directQ2DDFunc = matlabFunction(directQ2DD,'Vars',[q;qD;tau]);
 
-tauCheck = M(2,1)*q1DD + M(2,2)*q2DD + C(2) + g(2);
-tauCheckFunc = matlabFunction(tauCheck); % @(q1,q2,q1D,q1DD,q2DD)
+state = [-pi/3; 0];
+stateD = [0; 0];
 
-directQ2DD = (-M(2,1)*(M(1,1)\M(1,2)) + M(2,2))\(tau + M(2,1)*(M(1,1)\(C(1)+g(1)))- C(2)-g(2));
-%directQ2DD = inv(-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2))*(tau + M(2,1)*inv(M(1,1))*(C(1)+g(1))- C(2)-g(2));
-directQ2DDFunc = matlabFunction(directQ2DD); % @(q1,q2,q1D,q2D,tau)
+goal = [pi/2; 0; 0];
 
-state = [q ;qD];
-oldState = [-pi/2 0 0 0]';
-newState = [0 0 0 0]';
+deltaT = 5/1000;
+totalIt = 3000;
 
-%0 refers to the desired acceleration
-goal = [pi/2 0 0];
+Kp = 0.5;
+Kd = 0.1;
+tauLimit = 2.0;
+saturationQD = 2.0;
 
-Kd = 3 ;
-Kp = 2;
-deltaT = 15/100;
-totalT = 15;
-saturationQ2D = 1;
-tauLimit = 2;
-jointLimitQ1 = pi;
-jointLimitQ2 = pi;
+stateStorage = zeros(totalIt,4);
+taskStorage = zeros(totalIt,2);
 
-
-
-
-totalIterations = ceil(totalT/deltaT);
-stateStorage = zeros(totalIterations,2);
-taskStorage = zeros(totalIterations,1);
-indexStorage = 0;
-
-for t=0:deltaT:totalT
-    if (mod(t,1)==0)
-        disp(t);
+for i=1:totalIt
+    
+    tauCorrect = true;
+    
+    stateStorage(i,:) = [state' stateD'];
+    
+    task = comAngleFunc(state(1),state(2));
+    taskD = comAngleDFunc(state(1), state(2),stateD(1),stateD(2));
+    
+    taskStorage(i,:) = [task taskD];
+    
+    currentAngleMat = [cos(task), - sin(task); sin(task), cos(task)];
+    referenceAngleMat = [cos(goal(1)), - sin(goal(1)); sin(goal(1)), cos(goal(1))];
+    errorMat = (currentAngleMat)\referenceAngleMat;
+    errorAngle = atan2(errorMat(2,1),errorMat(1,1));
+    
+    vCurrent = goal(3) + Kd*(goal(2) - taskD) + Kp*errorAngle;
+    
+    q2DDCurrent = requiredQ2DDFunc(state(1),state(2),stateD(1),stateD(2),vCurrent)
+    
+    q1DDCurrent = requiredQ1DDFunc(state(1),state(2),stateD(1),stateD(2),q2DDCurrent);
+    
+    tauCurrent = tauCheckFunc(state(1),state(2),stateD(1),stateD(2),q1DDCurrent,q2DDCurrent)
+    
+    %check = directQ2DDFunc(state(1),state(2),stateD(1),stateD(2),tauCurrent);
+    
+    
+    if (tauCurrent>tauLimit)
+        i
+        tauCurrent = tauLimit;
+        tauCorrect = false;
+    elseif (tauCurrent < - tauLimit)
+        i
+        tauCurrent = -tauLimit;
+        tauCorrect = false;
     end
     
- 
-    tauViolated = false;
-    
-    indexStorage = indexStorage+1;
-    
-    taskState = [subs(comAngle,state(1:2), oldState(1:2)) subs(comAngleDot,state, oldState) 0];
-  
-    
-    stateStorage(indexStorage,:) = oldState(1:2);
-    taskStorage(indexStorage) = taskState(1);
-    
-    
-    actualMat = [cos(taskState(1)), - sin(taskState(1)); sin(taskState(1)), cos(taskState(1))];
-    referenceMat = [cos(goal(1)), - sin(goal(1)); sin(goal(1)), cos(goal(1))];
-    errorMat = (actualMat)\referenceMat;
-    errorVec = atan2(errorMat(2,1),errorMat(1,1));
-    
-    vA = goal(3) + Kd*(goal(2) - taskState(2)) + Kp*errorVec;
-
-    q2DDActual = requiredQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),vA);
-   % show1 = vpa(q2DDActual)
-    q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual);
-
-
-    tauActual = tauCheckFunc(oldState(1),oldState(2),oldState(4),q1DDActual,q2DDActual);
-    %inverso = vpa(subs((-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2)),q2,oldState(2)))
-    % inverso2 = vpa(subs((-M(2,1)*((M(1,1))\M(1,2)) + M(2,2)),q2,oldState(2)))
-    %show2 = vpa(directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual))
-    % q2DDActual = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual);
-    %  q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual);
-      
-    if (tauActual > tauLimit)
-        tauActual
-        t
-        tauActual = tauLimit;
-        tauViolated = true;
-    elseif (tauActual < - tauLimit)
-        tauActual
-        t
-        tauActual = - tauLimit;
-        tauViolated = true;
-    end
-    if (tauViolated==true)
-      q2DDActual = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual);
-      q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual);
-     
+    if (tauCorrect == false)
+        q2DDCurrent = directQ2DDFunc(state(1),state(2),stateD(1),stateD(2),tauCurrent);
+        q1DDCurrent = requiredQ1DDFunc(state(1),state(2),stateD(1),stateD(2),q2DDCurrent);
     end
     
+    oldStateD = stateD;
+
+    stateD = stateD + deltaT*[q1DDCurrent;q2DDCurrent];
     
-    newState(3:4) = [oldState(3) + q1DDActual*deltaT;
-                    oldState(4) + q2DDActual*deltaT];
-                
-    if (newState(4)> saturationQ2D)
-        newState(4) = saturationQ2D;
-        
-    elseif (newState(4)< - saturationQ2D)
-            newState(4) = - saturationQ2D;
+    if (stateD(2) > saturationQD)
+        stateD(2) = saturationQD
+    elseif (stateD(2)< -saturationQD)
+        stateD(2) = - saturationQD
     end
     
 
-    newState(1:2) = [mod(oldState(1) + newState(3)*deltaT + (1/2)*q1DDActual*deltaT^2, 2*pi);
-                    mod(oldState(2) + newState(4)*deltaT + (1/2)*q2DDActual*deltaT^2, 2*pi)];
     
-  %  if (newState(1)>jointLimitQ1)
-  %      newState(1) = jointLimitQ1;
-  %  elseif (newState(1)< -jointLimitQ1)
-  %      newState(1) = -jointLimitQ1;
-  %  end
-       
-    
-  %  if (newState(2)>jointLimitQ2)
-  %      newState(2) = jointLimitQ2;
-  %  elseif (newState(2)< -jointLimitQ2)
-  %      newState(2) = -jointLimitQ2;
-  %  end
-                
-    oldState = newState;
-  
-    
+    state = mod(state + deltaT*oldStateD + (1/2)*deltaT^2*[q1DDCurrent;q2DDCurrent],2*pi);
+
+
+
 end
+
 
 
 
@@ -211,7 +175,7 @@ legend([link1,link2], 'UNACTUATED','ACTUATED')
 x0 = [0,0]; %Origin of the base link
 
 for i=1:size(stateStorage,1)
-    x1 = [l1*cos(stateStorage(i,1)), l2*sin(stateStorage(i,1))];
+    x1 = [l1*cos(stateStorage(i,1)), l1*sin(stateStorage(i,1))];
     x2 = x1 + [l2*cos(stateStorage(i,1) + stateStorage(i,2)),l2*sin(stateStorage(i,1) + stateStorage(i,2))];
     
     set(link1,'XData',[x0(1),x1(1)], 'YData',[x0(2),x1(2)] )
@@ -222,19 +186,19 @@ for i=1:size(stateStorage,1)
     
     drawnow;
     
-    pause(0.15);
+    pause(deltaT);
     
     
 end
 
 
-timeStorage = linspace(0,totalT,totalIterations+1)';
 
-figure
-title('COM angle evolution');
-xlabel('Time');
-ylabel('COM angle');
-plot(timeStorage,taskStorage);
+
+%figure
+%title('COM angle evolution');
+%xlabel('Time');
+%ylabel('COM angle');
+%plot(timeStorage,taskStorage);
 
 
 
