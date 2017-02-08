@@ -23,12 +23,12 @@ qD = [0; 0; 0; 0; 0];
 goal = [pi/2 0 0;
         l*5/2 0 0];
     
-Kd = 3;
+Kd = 1;
 Kp = 1;
 deltaT = 15/100;
-totalIterations = 1;
+totalIterations = 400;
 saturationQD = 5;
-tauLimit = 0.5;
+tauLimit = 2;
 jointLimitQ = pi;
 
 
@@ -142,12 +142,6 @@ for t=1:totalIterations
     q = reorderingMatrix(q, active_joints)
     qD = reorderingMatrix(qD, active_joints);
     
-    %q1_ordered = q(1:n_joints_unactive);
-    %q2_ordered = q(n_joints_unactive+1:n_joints);
-
-    %q1D_ordered = qD_ordered(1:n_joints_unactive);
-    %q2D_ordered = qD_ordered(n_joints_unactive+1:n_joints);
-    
     B = reorderingMatrix(B, active_joints);
     C = reorderingMatrix(C, active_joints);
     h = reorderingMatrix(h, active_joints);
@@ -212,46 +206,47 @@ for t=1:totalIterations
     %combaciare le dimensioni.
   
   task
+  taskDot
     
     
     taskStorage(t,:) = [task' taskDot'];
 
     
     
-    actualAngleMat = [cos(task(1)), - sin(task(1)); sin(task(1)), cos(task(1))];
+    currentAngleMat = [cos(task(1)), - sin(task(1)); sin(task(1)), cos(task(1))];
     referenceAngleMat = [cos(goal(1,1)), - sin(goal(1,1)); sin(goal(1,1)), cos(goal(1,1))];
-    errorAngleMat = (actualAngleMat)\referenceAngleMat;
+    errorAngleMat = (currentAngleMat)\referenceAngleMat;
     errorAngleScalar = atan2(errorAngleMat(2,1),errorAngleMat(1,1));
     
     errorVec = [errorAngleScalar;
                 (task(2))- goal(2,1)];
     
-    vA = goal(:,3) + Kd*(goal(:,2) - taskDot) + Kp*errorVec;
+    vA = goal(:,3) + Kd*(goal(:,2) - taskDot) + Kp*errorVec
  
-    %JbarActual = J2 -J1*(B11\B12);
-    JbarActual = J2 - J1*(inv(B11)*B12)
+    %JbarCurrent = J2 -J1*(B11\B12);
+    JbarCurrent = J2 - J1*(inv(B11)*B12)
     
     
-    JbarPinvActual = pinv(JbarActual);
+    JbarPinvCurrent = pinv(JbarCurrent);
     
  
-    %q2DDActual = JbarPinv * (v - Jdot*qD + J1*(B11\(C1 + h1)));
-    q2DDActual = JbarPinvActual * (vA - Jdot*qD + J1*inv(B11)*(C1 + h1));
+    %q2DDCurrent = JbarPinv * (v - Jdot*qD + J1*(B11\(C1 + h1)));
+    q2DDCurrent = JbarPinvCurrent * (vA - Jdot*qD + J1*inv(B11)*(C1 + h1))
     
-    %q1DDActual = -B11\(B12*q2DD_ordered + C1 + h1);
-    q1DDActual = -inv(B11)*(B12*q2DDActual + C1 + h1);
+    %q1DDCurrent = -B11\(B12*q2DD_ordered + C1 + h1);
+    q1DDCurrent = -inv(B11)*(B12*q2DDCurrent + C1 + h1)
     
-    tauActual = B21*q1DDActual + B22*q2DDActual + C2 + h2
+    tauCurrent = B21*q1DDCurrent + B22*q2DDCurrent + C2 + h2
     
-    %show2 = (B22 - B21*(B11\B12))\(tauActual + B21*(B11\(C1 + h1)) - C2 - h2);
-    %show2 = inv( - B21*inv(B11)*B12 + B22)*(tauActual + B21*inv(B11)*(C1 + h1) - C2-h2);
+    %show2 = (B22 - B21*(B11\B12))\(tauCurrent + B21*(B11\(C1 + h1)) - C2 - h2);
+    %show2 = inv( - B21*inv(B11)*B12 + B22)*(tauCurrent + B21*inv(B11)*(C1 + h1) - C2-h2);
     
-    for i=1:size(tauActual,1)
-        if (tauActual(i) > tauLimit)
-            tauActual(i) = tauLimit;
+    for i=1:size(tauCurrent,1)
+        if (tauCurrent(i) > tauLimit)
+            tauCurrent(i) = tauLimit;
             tauViolated = true;
-        elseif (tauActual(i) < - tauLimit)
-            tauActual(i) = - tauLimit;
+        elseif (tauCurrent(i) < - tauLimit)
+            tauCurrent(i) = - tauLimit;
             tauViolated = true;
         end
     end
@@ -259,18 +254,18 @@ for t=1:totalIterations
 
     if (tauViolated==true)
        disp('tauViolated');
-       %q2DDActual = (B22 - B21*(B11\B12))\(tauActual + B21*(B11\(C1 + h1)) - C2 - h2);
-       q2DDActual = inv( - B21*inv(B11)*B12 + B22)*(tauActual + B21*inv(B11)*(C1 + h1) - C2-h2);
-       q1DDActual = -inv(B11)*(B12*q2DDActual + C1 + h1);
+       %q2DDCurrent = (B22 - B21*(B11\B12))\(tauCurrent + B21*(B11\(C1 + h1)) - C2 - h2);
+       q2DDCurrent = inv( - B21*inv(B11)*B12 + B22)*(tauCurrent + B21*inv(B11)*(C1 + h1) - C2-h2)
+       q1DDCurrent = -inv(B11)*(B12*q2DDCurrent + C1 + h1)
 
     end
-    q1DDActual
-    q2DDActual
+
+
     
     
     
     %%%%%%%%%%%%%%%INTEGRATION
-    qD = qD + [q1DDActual; q2DDActual]*deltaT;
+    qD = qD + [q1DDCurrent; q2DDCurrent]*deltaT;
 
     for i=1:(n_joints-n_joints_unactive)             
     if (qD(n_joints_unactive + i)> saturationQD)
@@ -280,7 +275,9 @@ for t=1:totalIterations
             qD(n_joints_unactive + i) = - saturationQD;
     end
     end
-   
+    
+    
+    q = mod(q + qD*deltaT + (1/2)*[q1DDCurrent; q2DDCurrent]*deltaT^2, 2*pi);
 
      q = INVorder(q,active_joints);
      qD = INVorder(qD,active_joints);
