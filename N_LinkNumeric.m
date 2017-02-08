@@ -1,5 +1,7 @@
 clear all
 clc
+
+digits(10)
 %omega = [qD(1); qD(1)+qD(2); qD(1)+qD(2)+qD(3); qD(1)+qD(2)+qD(3)+qD(4); qD(1)+qD(2)+qD(3)+qD(4)+qD(5)];
 
 n_joints = 5;
@@ -18,6 +20,7 @@ lc = 1/10;
 
 q = [-pi/2; 0; 0; 0; 0];
 qD = [0; 0; 0; 0; 0];
+
 
 
 goal = [pi/2 0 0;
@@ -159,11 +162,15 @@ for t=1:totalIterations
 
 
     %%%%%%%%%%%%%%%%TASK TERMS COMPUTATION
+    
     comPos = (pc1 + pc2 + pc3 + pc4 + pc5)/n_joints;
     comAngle = atan2(comPos(2),comPos(1));
     comLength = norm(comPos);
+    
     task = [comAngle; comLength];
-
+    if (t == 1)%%USATO PER DIFF CHE ORA NON C'E'
+        oldTask = task - 0.01;
+    end
     %Already Ordered!!!
     J = [ 1, (27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 21*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 35*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 35)/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165),         (7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 5*cos(q(4) + q(5)) + 3*cos(q(5)) + 1)/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165), (27*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 63*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 84)/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165), (27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 21*cos(q(3) + q(4)) + 5*cos(q(4) + q(5)) + 15*cos(q(4)) + 6*cos(q(5)) + 10)/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165);
      0,                                     -(27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 21*sin(q(3) + q(4)) + 35*sin(q(3)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)), -(7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 5*sin(q(4) + q(5)) + 3*sin(q(5)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)),                                                                                           -(27*sin(q(2) + q(3) + q(4)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 63*sin(q(2)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)),      -(27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 21*sin(q(3) + q(4)) + 5*sin(q(4) + q(5)) + 15*sin(q(4)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2))];
@@ -171,7 +178,7 @@ for t=1:totalIterations
 
 
     
-    %QUI PRIMA MOLTIPLICAVA SOLO PER QD.....
+    %QUI PRIMA MOLTIPLICAVA SOLO PER QD non ordinato, ora qD ? ordinato
     taskDot = J * qD;
  
 
@@ -281,6 +288,7 @@ for t=1:totalIterations
 
      q = INVorder(q,active_joints);
      qD = INVorder(qD,active_joints);
+     oldTask = task;
     toc
 
 end

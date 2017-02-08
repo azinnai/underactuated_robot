@@ -84,8 +84,8 @@ goal = [pi/2 0 0];
 
 Kd = 3 ;
 Kp = 2;
-deltaT = 15/100;
-totalT = 0;
+deltaT = 15/1000;
+totalT = 3;
 saturationQ2D = 1;
 tauLimit = 2;
 jointLimitQ1 = pi;
@@ -126,8 +126,8 @@ for t=0:deltaT:totalT
     
     vA = goal(3) + Kd*(goal(2) - taskState(2)) + Kp*errorVec;
 
-    q2DDActual = requiredQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),vA)
-    q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual)
+    q2DDActual = requiredQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),vA);
+    q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual);
 
 
     stateStorage2(indexStorage,:) = [oldState', q1DDActual,q2DDActual];
@@ -136,8 +136,8 @@ for t=0:deltaT:totalT
     %inverso = vpa(subs((-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2)),q2,oldState(2)))
     % inverso2 = vpa(subs((-M(2,1)*((M(1,1))\M(1,2)) + M(2,2)),q2,oldState(2)))
     %show2 = vpa(directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual))
-    q2DDActual = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual)
-    q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual)
+    show3 = directQ2DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),tauActual) - q2DDActual
+    %q1DDActual = requiredQ1DDFunc(oldState(1),oldState(2),oldState(3),oldState(4),q2DDActual);
       
       
       
