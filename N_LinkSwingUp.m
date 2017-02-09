@@ -11,7 +11,7 @@ omega = [q1D; q1D+q2D; q1D+q2D+q3D; q1D+q2D+q3D+q4D; q1D+q2D+q3D+q4D+q5D];
 
 tau = [tau1; tau2; tau3; tau4; tau5];
 n_joints = 5;
-active_joints = [0;1;0;1;0];
+active_joints = [1;1;0;1;1];
 n_joints_unactive = sum(active_joints(:) ==0);
 %n_joints_active = n_joints - n_joints_unactive;
 
@@ -117,6 +117,9 @@ J = jacobian(task, q_ordered)
 %J = simplify(J);
 
 J1 = J(:,1:n_joints_unactive);
+if (n_joints_unactive ==0)
+    J1 = 0;
+end
 J2 = J(:,n_joints_unactive+1:n_joints);
 
 

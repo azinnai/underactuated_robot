@@ -1,154 +1,138 @@
 clear all
 clc
 
-digits(10)
-%omega = [qD(1); qD(1)+qD(2); qD(1)+qD(2)+qD(3); qD(1)+qD(2)+qD(3)+qD(4); qD(1)+qD(2)+qD(3)+qD(4)+qD(5)];
-
-n_joints = 5;
-active_joints = [0;1;0;1;0];
-n_joints_unactive = sum(active_joints(:) ==0);
 
 %robot parameters for 5r robots with all equal links
-m = 1/5;
-l = 1/5;
-I = 1/20;
-lc = 1/10; 
+m = 0.2;
+l = 0.2;
+I = 0.05;
+lc = 0.1; 
+
+n_joints = 5;
+active_joints = [0;1;1;1;1];
+n_joints_unactive = sum(active_joints(:) ==0);
 %%%%%%%%%%%%%%%%INITIAL STATE AND GOAL
-
-%Se i giunti iniziali sono in [-pi/2 0 0 0 0] c'? una divisione per zero in
-%taskDot
-
 q = [-pi/2; 0; 0; 0; 0];
 qD = [0; 0; 0; 0; 0];
-
-
 
 goal = [pi/2 0 0;
         l*5/2 0 0];
     
 Kd = 1;
 Kp = 1;
-deltaT = 15/100;
-totalIterations = 400;
+deltaT = 0.001;
+totalSeconds = 10;
+totalIterations = totalSeconds/deltaT;
 saturationQD = 5;
 tauLimit = 2;
 jointLimitQ = pi;
 
+%%%%%%%%%%MATLAB FUNCTION DEFINITION
+syms q1 q2 q3 q4 q5 q1D q2D q3D q4D q5D real
+omega = [q1D; q1D+q2D; q1D+q2D+q3D; q1D+q2D+q3D+q4D; q1D+q2D+q3D+q4D+q5D];
+
+%Compact definitions
+s1 = sin(q1);
+s2 = sin(q2);
+s3 = sin(q3);
+s4 = sin(q4);
+s5 = sin(q5);
+s12 = sin(q1+q2);
+s123 = sin(q1+q2+q3);
+s1234 = sin(q1+q2+q3+q4);
+s12345 = sin(q1+q2+q3+q4+q5); 
+
+c1 = cos(q1);
+c2 = cos(q2);
+c3 = cos(q3);
+c4 = cos(q4);
+c5 = cos(q5);
+c12 = cos(q1+q2);
+c123 = cos(q1+q2+q3);
+c1234 = cos(q1+q2+q3+q4);
+c12345 = cos(q1+q2+q3+q4+q5); 
+
+%robot link COM
+pc1 = [lc*c1;lc*s1];
+pc2 = [l*c1+lc*c12;l*s1+lc*s12];
+pc3 = [l*c1+l*c12+lc*c123;l*s1+l*s12+lc*s123];
+pc4 = [l*c1+l*c12+l*c123+lc*c1234;l*s1+l*s12+l*s123+lc*s1234];
+pc5 = [l*c1+l*c12+l*c123+l*c1234+lc*c12345;l*s1+l*s12+l*s123+l*s1234+lc*s12345];
+
+Jc1 = jacobian(pc1,[q1;q2;q3;q4;q5]);
+Jc2 = jacobian(pc2,[q1;q2;q3;q4;q5]);
+Jc3 = jacobian(pc3,[q1;q2;q3;q4;q5]);
+Jc4 = jacobian(pc4,[q1;q2;q3;q4;q5]);
+Jc5 = jacobian(pc5,[q1;q2;q3;q4;q5]);
+
+vc1 = Jc1*[q1D;q2D;q3D;q4D;q5D];
+vc2 = Jc2*[q1D;q2D;q3D;q4D;q5D];
+vc3 = Jc3*[q1D;q2D;q3D;q4D;q5D];
+vc4 = Jc4*[q1D;q2D;q3D;q4D;q5D];
+vc5 = Jc5*[q1D;q2D;q3D;q4D;q5D];
+
+
+g = [0;9.81];
+U = m*g'*(pc1 + pc2 + pc3 + pc4 + pc5);  
+
+
+Tv = (1/2)*m*(vc1'*vc1 + vc2'*vc2 + vc3'*vc3 + vc4'*vc4 + vc5'*vc5);
+Tomega = simplify((1/2)*I*(omega'*omega));
+
+T = Tv + Tomega;
+BSymbols = Bmatrix(T,n_joints);
+CSymbols = Cmatrix(BSymbols);
+hSymbols = jacobian(U,[q1;q2;q3;q4;q5])';
+
+qSymbols_ordered = reorderingMatrix([q1;q2;q3;q4;q5],active_joints);
+qDSymbols_ordered = reorderingMatrix([q1D;q2D;q3D;q4D;q5D],active_joints);
+
+BSymbols = reorderingMatrix(BSymbols, active_joints);
+CSymbols = reorderingMatrix(CSymbols, active_joints);
+hSymbols = reorderingMatrix(hSymbols, active_joints);
+
+BFunc = matlabFunction(BSymbols);%@(q2,q3,q4,q5)
+CFunc = matlabFunction(CSymbols);%@(q2,q3,q4,q5,q1D,q2D,q3D,q4D,q5D)
+hFunc = matlabFunction(hSymbols);% @(q1,q2,q3,q4,q5)
+
+comPos = (pc1 + pc2 + pc3 + pc4 + pc5)/n_joints;
+comAngle = atan2(comPos(2),comPos(1));
+comLength = norm(comPos);
+taskSymbols = [comAngle; comLength];
+taskFunc = matlabFunction(taskSymbols);% @(q1,q2,q3,q4,q5)
+
+JSymbols = jacobian(taskSymbols, qSymbols_ordered);
+JFunc = matlabFunction(JSymbols);% @(q1,q2,q3,q4,q5)
+
+Jdq1 = jacobian(JSymbols(:,1),qSymbols_ordered(1));
+Jdq2 = jacobian(JSymbols(:,2),qSymbols_ordered(2));
+Jdq3 = jacobian(JSymbols(:,3),qSymbols_ordered(3));
+Jdq4 = jacobian(JSymbols(:,4),qSymbols_ordered(4));
+Jdq5 = jacobian(JSymbols(:,5),qSymbols_ordered(5));
+
+JdotSymbols = [Jdq1*qDSymbols_ordered(1),Jdq2*qDSymbols_ordered(2),Jdq3*qDSymbols_ordered(3),Jdq4*qDSymbols_ordered(4),Jdq5*qDSymbols_ordered(5) ];
+JdotFunc = matlabFunction(JdotSymbols);%@(q1,q2,q3,q4,q5,q1D,q2D,q3D,q4D,q5D)
+
+
 
 stateStorage = zeros(totalIterations,n_joints*2);
 taskStorage = zeros(totalIterations,4);
-
+errorStorage = zeros(totalIterations,2);
 
 disp('Beginning simulation loop');
 
 %%%%%%%%%%%%%%%%CONTROL LOOP
 for t=1:totalIterations
-    tic
-    if (mod(t,100)==0)
-        disp(t);
-    end
     
     tauViolated = false;
     %Save the state before reordering it
     stateStorage(t,:) = [q',qD'];
+
     
+    B = BFunc(q(2),q(3),q(4),q(5));
+    C = CFunc(q(2),q(3),q(4),q(5),qD(1),qD(2),qD(3),qD(4),qD(5));
+    h = hFunc(q(1),q(2),q(3),q(4),q(5));
     
-    %%%%%%%%%%%%%%%%DYNAMIC MODEL
-    s1 = sin(q(1));
-    s2 = sin(q(2));
-    s3 = sin(q(3));
-    s4 = sin(q(4));
-    s5 = sin(q(5));
-    s12 = sin(q(1)+q(2));
-    s123 = sin(q(1)+q(2)+q(3));
-    s1234 = sin(q(1)+q(2)+q(3)+q(4));
-    s12345 = sin(q(1)+q(2)+q(3)+q(4)+q(5)); 
-
-    c1 = cos(q(1));
-    c2 = cos(q(2));
-    c3 = cos(q(3));
-    c4 = cos(q(4));
-    c5 = cos(q(5));
-    c12 = cos(q(1)+q(2));
-    c123 = cos(q(1)+q(2)+q(3));
-    c1234 = cos(q(1)+q(2)+q(3)+q(4));
-    c12345 = cos(q(1)+q(2)+q(3)+q(4)+q(5)); 
-
-    %robot link COM
-    pc1 = [lc*c1;lc*s1];
-    pc2 = [l*c1+lc*c12;l*s1+lc*s12];
-    pc3 = [l*c1+l*c12+lc*c123;l*s1+l*s12+lc*s123];
-    pc4 = [l*c1+l*c12+l*c123+lc*c1234;l*s1+l*s12+l*s123+lc*s1234];
-    pc5 = [l*c1+l*c12+l*c123+l*c1234+lc*c12345;l*s1+l*s12+l*s123+l*s1234+lc*s12345];
-
-    Jc1 = [ -sin(q(1))/10, 0, 0, 0, 0;
-           cos(q(1))/10, 0, 0, 0, 0];
-
-    Jc2 = [ - sin(q(1) + q(2))/10 - sin(q(1))/5, -sin(q(1) + q(2))/10, 0, 0, 0;
-       cos(q(1) + q(2))/10 + cos(q(1))/5,  cos(q(1) + q(2))/10, 0, 0, 0];
-
-    Jc3 = [ - sin(q(1) + q(2) + q(3))/10 - sin(q(1) + q(2))/5 - sin(q(1))/5, - sin(q(1) + q(2) + q(3))/10 - sin(q(1) + q(2))/5, -sin(q(1) + q(2) + q(3))/10, 0, 0;
-       cos(q(1) + q(2) + q(3))/10 + cos(q(1) + q(2))/5 + cos(q(1))/5,   cos(q(1) + q(2) + q(3))/10 + cos(q(1) + q(2))/5,  cos(q(1) + q(2) + q(3))/10, 0, 0];
-
-    Jc4 = [ - sin(q(1) + q(2) + q(3))/5 - sin(q(1) + q(2) + q(3) + q(4))/10 - sin(q(1) + q(2))/5 - sin(q(1))/5, - sin(q(1) + q(2) + q(3))/5 - sin(q(1) + q(2) + q(3) + q(4))/10 - sin(q(1) + q(2))/5, - sin(q(1) + q(2) + q(3))/5 - sin(q(1) + q(2) + q(3) + q(4))/10, -sin(q(1) + q(2) + q(3) + q(4))/10, 0;
-       cos(q(1) + q(2) + q(3))/5 + cos(q(1) + q(2) + q(3) + q(4))/10 + cos(q(1) + q(2))/5 + cos(q(1))/5,   cos(q(1) + q(2) + q(3))/5 + cos(q(1) + q(2) + q(3) + q(4))/10 + cos(q(1) + q(2))/5,   cos(q(1) + q(2) + q(3))/5 + cos(q(1) + q(2) + q(3) + q(4))/10,  cos(q(1) + q(2) + q(3) + q(4))/10, 0];
-
-
-    Jc5 =[ - sin(q(1) + q(2) + q(3) + q(4) + q(5))/10 - sin(q(1) + q(2) + q(3))/5 - sin(q(1) + q(2) + q(3) + q(4))/5 - sin(q(1) + q(2))/5 - sin(q(1))/5, - sin(q(1) + q(2) + q(3) + q(4) + q(5))/10 - sin(q(1) + q(2) + q(3))/5 - sin(q(1) + q(2) + q(3) + q(4))/5 - sin(q(1) + q(2))/5, - sin(q(1) + q(2) + q(3) + q(4) + q(5))/10 - sin(q(1) + q(2) + q(3))/5 - sin(q(1) + q(2) + q(3) + q(4))/5, - sin(q(1) + q(2) + q(3) + q(4) + q(5))/10 - sin(q(1) + q(2) + q(3) + q(4))/5, -sin(q(1) + q(2) + q(3) + q(4) + q(5))/10;
-       cos(q(1) + q(2) + q(3))/5 + cos(q(1) + q(2) + q(3) + q(4))/5 + cos(q(1) + q(2))/5 + cos(q(1))/5 + cos(q(1) + q(2) + q(3) + q(4) + q(5))/10,   cos(q(1) + q(2) + q(3))/5 + cos(q(1) + q(2) + q(3) + q(4))/5 + cos(q(1) + q(2))/5 + cos(q(1) + q(2) + q(3) + q(4) + q(5))/10,   cos(q(1) + q(2) + q(3))/5 + cos(q(1) + q(2) + q(3) + q(4))/5 + cos(q(1) + q(2) + q(3) + q(4) + q(5))/10,   cos(q(1) + q(2) + q(3) + q(4))/5 + cos(q(1) + q(2) + q(3) + q(4) + q(5))/10,  cos(q(1) + q(2) + q(3) + q(4) + q(5))/10];
-
-
-    vc1 = Jc1*qD;
-    vc2 = Jc2*qD;
-    vc3 = Jc3*qD;
-    vc4 = Jc4*qD;
-    vc5 = Jc5*qD;
-
-
-    g = [0;-9.81];
-    U = m*g'*(pc1 + pc2 + pc3 + pc4 + pc5);  
-
-
-    %Tv = (1/2)*m*(vc1'*vc1 + vc2'*vc2 + vc3'*vc3 + vc4'*vc4 + vc5'*vc5);
-    %Tomega = simplify((1/2)*I*(omega'*omega));
-
-    %T = Tv + Tomega;
-
-    B = [  (3*cos(q(2) + q(3) + q(4)))/125 + cos(q(3) + q(4) + q(5))/125 + cos(q(2) + q(3) + q(4) + q(5))/125 + cos(q(2) + q(3))/25 + (3*cos(q(3) + q(4)))/125 + cos(q(4) + q(5))/125 + (7*cos(q(2)))/125 + cos(q(3))/25 + (3*cos(q(4)))/125 + cos(q(5))/125 + 17/50, (3*cos(q(2) + q(3) + q(4)))/250 + cos(q(3) + q(4) + q(5))/125 + cos(q(2) + q(3) + q(4) + q(5))/250 + cos(q(2) + q(3))/50 + (3*cos(q(3) + q(4)))/125 + cos(q(4) + q(5))/125 + (7*cos(q(2)))/250 + cos(q(3))/25 + (3*cos(q(4)))/125 + cos(q(5))/125 + 32/125, (3*cos(q(2) + q(3) + q(4)))/250 + cos(q(3) + q(4) + q(5))/250 + cos(q(2) + q(3) + q(4) + q(5))/250 + cos(q(2) + q(3))/50 + (3*cos(q(3) + q(4)))/250 + cos(q(4) + q(5))/125 + cos(q(3))/50 + (3*cos(q(4)))/125 + cos(q(5))/125 + 9/50, (3*cos(q(2) + q(3) + q(4)))/250 + cos(q(3) + q(4) + q(5))/250 + cos(q(2) + q(3) + q(4) + q(5))/250 + (3*cos(q(3) + q(4)))/250 + cos(q(4) + q(5))/250 + (3*cos(q(4)))/250 + cos(q(5))/125 + 14/125, cos(q(3) + q(4) + q(5))/250 + cos(q(2) + q(3) + q(4) + q(5))/250 + cos(q(4) + q(5))/250 + cos(q(5))/250 + 13/250;
-                         (3*cos(q(2) + q(3) + q(4)))/250 + cos(q(3) + q(4) + q(5))/250 + cos(q(2) + q(3) + q(4) + q(5))/250 + cos(q(2) + q(3))/50 + (3*cos(q(3) + q(4)))/250 + cos(q(4) + q(5))/125 + cos(q(3))/50 + (3*cos(q(4)))/125 + cos(q(5))/125 + 9/50,                                                                                                cos(q(3) + q(4) + q(5))/250 + (3*cos(q(3) + q(4)))/250 + cos(q(4) + q(5))/125 + cos(q(3))/50 + (3*cos(q(4)))/125 + cos(q(5))/125 + 9/50,                                                                                                                                        cos(q(4) + q(5))/125 + (3*cos(q(4)))/125 + cos(q(5))/125 + 9/50,                                                                                                         cos(q(4) + q(5))/250 + (3*cos(q(4)))/250 + cos(q(5))/125 + 14/125,                                                      cos(q(4) + q(5))/250 + cos(q(5))/250 + 13/250;
-                                                                                                                           cos(q(3) + q(4) + q(5))/250 + cos(q(2) + q(3) + q(4) + q(5))/250 + cos(q(4) + q(5))/250 + cos(q(5))/250 + 13/250,                                                                                                                                                    cos(q(3) + q(4) + q(5))/250 + cos(q(4) + q(5))/250 + cos(q(5))/250 + 13/250,                                                                                                                                                        cos(q(4) + q(5))/250 + cos(q(5))/250 + 13/250,                                                                                                                                              cos(q(5))/250 + 13/250,                                                                                       13/250;
-     (3*cos(q(2) + q(3) + q(4)))/250 + cos(q(3) + q(4) + q(5))/125 + cos(q(2) + q(3) + q(4) + q(5))/250 + cos(q(2) + q(3))/50 + (3*cos(q(3) + q(4)))/125 + cos(q(4) + q(5))/125 + (7*cos(q(2)))/250 + cos(q(3))/25 + (3*cos(q(4)))/125 + cos(q(5))/125 + 32/125,                                                                                              cos(q(3) + q(4) + q(5))/125 + (3*cos(q(3) + q(4)))/125 + cos(q(4) + q(5))/125 + cos(q(3))/25 + (3*cos(q(4)))/125 + cos(q(5))/125 + 32/125,                                                                            cos(q(3) + q(4) + q(5))/250 + (3*cos(q(3) + q(4)))/250 + cos(q(4) + q(5))/125 + cos(q(3))/50 + (3*cos(q(4)))/125 + cos(q(5))/125 + 9/50,                                                          cos(q(3) + q(4) + q(5))/250 + (3*cos(q(3) + q(4)))/250 + cos(q(4) + q(5))/250 + (3*cos(q(4)))/250 + cos(q(5))/125 + 14/125,                              cos(q(3) + q(4) + q(5))/250 + cos(q(4) + q(5))/250 + cos(q(5))/250 + 13/250;
-                                                      (3*cos(q(2) + q(3) + q(4)))/250 + cos(q(3) + q(4) + q(5))/250 + cos(q(2) + q(3) + q(4) + q(5))/250 + (3*cos(q(3) + q(4)))/250 + cos(q(4) + q(5))/250 + (3*cos(q(4)))/250 + cos(q(5))/125 + 14/125,                                                                                                           cos(q(3) + q(4) + q(5))/250 + (3*cos(q(3) + q(4)))/250 + cos(q(4) + q(5))/250 + (3*cos(q(4)))/250 + cos(q(5))/125 + 14/125,                                                                                                                                      cos(q(4) + q(5))/250 + (3*cos(q(4)))/250 + cos(q(5))/125 + 14/125,                                                                                                                                              cos(q(5))/125 + 14/125,                                                                         cos(q(5))/250 + 13/250];
-
-
-
-
-
-    C =  [- (7*qD(2)^2*sin(q(2)))/250 - (qD(3)^2*sin(q(3)))/50 - (3*qD(4)^2*sin(q(4)))/250 - (qD(5)^2*sin(q(5)))/250 - (3*qD(2)^2*sin(q(2) + q(3) + q(4)))/250 - (3*qD(3)^2*sin(q(2) + q(3) + q(4)))/250 - (3*qD(4)^2*sin(q(2) + q(3) + q(4)))/250 - (qD(3)^2*sin(q(3) + q(4) + q(5)))/250 - (qD(4)^2*sin(q(3) + q(4) + q(5)))/250 - (qD(5)^2*sin(q(3) + q(4) + q(5)))/250 - (qD(2)^2*sin(q(2) + q(3) + q(4) + q(5)))/250 - (qD(3)^2*sin(q(2) + q(3) + q(4) + q(5)))/250 - (qD(4)^2*sin(q(2) + q(3) + q(4) + q(5)))/250 - (qD(5)^2*sin(q(2) + q(3) + q(4) + q(5)))/250 - (qD(2)^2*sin(q(2) + q(3)))/50 - (qD(3)^2*sin(q(2) + q(3)))/50 - (3*qD(3)^2*sin(q(3) + q(4)))/250 - (3*qD(4)^2*sin(q(3) + q(4)))/250 - (qD(4)^2*sin(q(4) + q(5)))/250 - (qD(5)^2*sin(q(4) + q(5)))/250 - (7*qD(1)*qD(2)*sin(q(2)))/125 - (qD(1)*qD(3)*sin(q(3)))/25 - (qD(2)*qD(3)*sin(q(3)))/25 - (3*qD(1)*qD(4)*sin(q(4)))/125 - (3*qD(2)*qD(4)*sin(q(4)))/125 - (qD(1)*qD(5)*sin(q(5)))/125 - (3*qD(3)*qD(4)*sin(q(4)))/125 - (qD(2)*qD(5)*sin(q(5)))/125 - (qD(3)*qD(5)*sin(q(5)))/125 - (qD(4)*qD(5)*sin(q(5)))/125 - (3*qD(1)*qD(2)*sin(q(2) + q(3) + q(4)))/125 - (3*qD(1)*qD(3)*sin(q(2) + q(3) + q(4)))/125 - (3*qD(1)*qD(4)*sin(q(2) + q(3) + q(4)))/125 - (3*qD(2)*qD(3)*sin(q(2) + q(3) + q(4)))/125 - (3*qD(2)*qD(4)*sin(q(2) + q(3) + q(4)))/125 - (qD(1)*qD(3)*sin(q(3) + q(4) + q(5)))/125 - (3*qD(3)*qD(4)*sin(q(2) + q(3) + q(4)))/125 - (qD(1)*qD(4)*sin(q(3) + q(4) + q(5)))/125 - (qD(2)*qD(3)*sin(q(3) + q(4) + q(5)))/125 - (qD(1)*qD(5)*sin(q(3) + q(4) + q(5)))/125 - (qD(2)*qD(4)*sin(q(3) + q(4) + q(5)))/125 - (qD(2)*qD(5)*sin(q(3) + q(4) + q(5)))/125 - (qD(3)*qD(4)*sin(q(3) + q(4) + q(5)))/125 - (qD(3)*qD(5)*sin(q(3) + q(4) + q(5)))/125 - (qD(4)*qD(5)*sin(q(3) + q(4) + q(5)))/125 - (qD(1)*qD(2)*sin(q(2) + q(3) + q(4) + q(5)))/125 - (qD(1)*qD(3)*sin(q(2) + q(3) + q(4) + q(5)))/125 - (qD(1)*qD(4)*sin(q(2) + q(3) + q(4) + q(5)))/125 - (qD(2)*qD(3)*sin(q(2) + q(3) + q(4) + q(5)))/125 - (qD(1)*qD(5)*sin(q(2) + q(3) + q(4) + q(5)))/125 - (qD(2)*qD(4)*sin(q(2) + q(3) + q(4) + q(5)))/125 - (qD(2)*qD(5)*sin(q(2) + q(3) + q(4) + q(5)))/125 - (qD(3)*qD(4)*sin(q(2) + q(3) + q(4) + q(5)))/125 - (qD(3)*qD(5)*sin(q(2) + q(3) + q(4) + q(5)))/125 - (qD(4)*qD(5)*sin(q(2) + q(3) + q(4) + q(5)))/125 - (qD(1)*qD(2)*sin(q(2) + q(3)))/25 - (qD(1)*qD(3)*sin(q(2) + q(3)))/25 - (qD(2)*qD(3)*sin(q(2) + q(3)))/25 - (3*qD(1)*qD(3)*sin(q(3) + q(4)))/125 - (3*qD(1)*qD(4)*sin(q(3) + q(4)))/125 - (3*qD(2)*qD(3)*sin(q(3) + q(4)))/125 - (3*qD(2)*qD(4)*sin(q(3) + q(4)))/125 - (qD(1)*qD(4)*sin(q(4) + q(5)))/125 - (3*qD(3)*qD(4)*sin(q(3) + q(4)))/125 - (qD(1)*qD(5)*sin(q(4) + q(5)))/125 - (qD(2)*qD(4)*sin(q(4) + q(5)))/125 - (qD(2)*qD(5)*sin(q(4) + q(5)))/125 - (qD(3)*qD(4)*sin(q(4) + q(5)))/125 - (qD(3)*qD(5)*sin(q(4) + q(5)))/125 - (qD(4)*qD(5)*sin(q(4) + q(5)))/125;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      (qD(1)^2*sin(q(3)))/50 + (qD(2)^2*sin(q(3)))/50 - (3*qD(4)^2*sin(q(4)))/250 - (qD(5)^2*sin(q(5)))/250 + (3*qD(1)^2*sin(q(2) + q(3) + q(4)))/250 + (qD(1)^2*sin(q(3) + q(4) + q(5)))/250 + (qD(2)^2*sin(q(3) + q(4) + q(5)))/250 + (qD(1)^2*sin(q(2) + q(3) + q(4) + q(5)))/250 + (qD(1)^2*sin(q(2) + q(3)))/50 + (3*qD(1)^2*sin(q(3) + q(4)))/250 + (3*qD(2)^2*sin(q(3) + q(4)))/250 - (qD(4)^2*sin(q(4) + q(5)))/250 - (qD(5)^2*sin(q(4) + q(5)))/250 + (qD(1)*qD(2)*sin(q(3)))/25 - (3*qD(1)*qD(4)*sin(q(4)))/125 - (3*qD(2)*qD(4)*sin(q(4)))/125 - (qD(1)*qD(5)*sin(q(5)))/125 - (3*qD(3)*qD(4)*sin(q(4)))/125 - (qD(2)*qD(5)*sin(q(5)))/125 - (qD(3)*qD(5)*sin(q(5)))/125 - (qD(4)*qD(5)*sin(q(5)))/125 + (qD(1)*qD(2)*sin(q(3) + q(4) + q(5)))/125 + (3*qD(1)*qD(2)*sin(q(3) + q(4)))/125 - (qD(1)*qD(4)*sin(q(4) + q(5)))/125 - (qD(1)*qD(5)*sin(q(4) + q(5)))/125 - (qD(2)*qD(4)*sin(q(4) + q(5)))/125 - (qD(2)*qD(5)*sin(q(4) + q(5)))/125 - (qD(3)*qD(4)*sin(q(4) + q(5)))/125 - (qD(3)*qD(5)*sin(q(4) + q(5)))/125 - (qD(4)*qD(5)*sin(q(4) + q(5)))/125;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 (qD(1)^2*sin(q(5)))/250 + (qD(2)^2*sin(q(5)))/250 + (qD(3)^2*sin(q(5)))/250 + (qD(4)^2*sin(q(5)))/250 + (qD(1)^2*sin(q(3) + q(4) + q(5)))/250 + (qD(2)^2*sin(q(3) + q(4) + q(5)))/250 + (qD(1)^2*sin(q(2) + q(3) + q(4) + q(5)))/250 + (qD(1)^2*sin(q(4) + q(5)))/250 + (qD(2)^2*sin(q(4) + q(5)))/250 + (qD(3)^2*sin(q(4) + q(5)))/250 + (qD(1)*qD(2)*sin(q(5)))/125 + (qD(1)*qD(3)*sin(q(5)))/125 + (qD(1)*qD(4)*sin(q(5)))/125 + (qD(2)*qD(3)*sin(q(5)))/125 + (qD(2)*qD(4)*sin(q(5)))/125 + (qD(3)*qD(4)*sin(q(5)))/125 + (qD(1)*qD(2)*sin(q(3) + q(4) + q(5)))/125 + (qD(1)*qD(2)*sin(q(4) + q(5)))/125 + (qD(1)*qD(3)*sin(q(4) + q(5)))/125 + (qD(2)*qD(3)*sin(q(4) + q(5)))/125;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                (7*qD(1)^2*sin(q(2)))/250 - (qD(3)^2*sin(q(3)))/50 - (3*qD(4)^2*sin(q(4)))/250 - (qD(5)^2*sin(q(5)))/250 + (3*qD(1)^2*sin(q(2) + q(3) + q(4)))/250 - (qD(3)^2*sin(q(3) + q(4) + q(5)))/250 - (qD(4)^2*sin(q(3) + q(4) + q(5)))/250 - (qD(5)^2*sin(q(3) + q(4) + q(5)))/250 + (qD(1)^2*sin(q(2) + q(3) + q(4) + q(5)))/250 + (qD(1)^2*sin(q(2) + q(3)))/50 - (3*qD(3)^2*sin(q(3) + q(4)))/250 - (3*qD(4)^2*sin(q(3) + q(4)))/250 - (qD(4)^2*sin(q(4) + q(5)))/250 - (qD(5)^2*sin(q(4) + q(5)))/250 - (qD(1)*qD(3)*sin(q(3)))/25 - (qD(2)*qD(3)*sin(q(3)))/25 - (3*qD(1)*qD(4)*sin(q(4)))/125 - (3*qD(2)*qD(4)*sin(q(4)))/125 - (qD(1)*qD(5)*sin(q(5)))/125 - (3*qD(3)*qD(4)*sin(q(4)))/125 - (qD(2)*qD(5)*sin(q(5)))/125 - (qD(3)*qD(5)*sin(q(5)))/125 - (qD(4)*qD(5)*sin(q(5)))/125 - (qD(1)*qD(3)*sin(q(3) + q(4) + q(5)))/125 - (qD(1)*qD(4)*sin(q(3) + q(4) + q(5)))/125 - (qD(2)*qD(3)*sin(q(3) + q(4) + q(5)))/125 - (qD(1)*qD(5)*sin(q(3) + q(4) + q(5)))/125 - (qD(2)*qD(4)*sin(q(3) + q(4) + q(5)))/125 - (qD(2)*qD(5)*sin(q(3) + q(4) + q(5)))/125 - (qD(3)*qD(4)*sin(q(3) + q(4) + q(5)))/125 - (qD(3)*qD(5)*sin(q(3) + q(4) + q(5)))/125 - (qD(4)*qD(5)*sin(q(3) + q(4) + q(5)))/125 - (3*qD(1)*qD(3)*sin(q(3) + q(4)))/125 - (3*qD(1)*qD(4)*sin(q(3) + q(4)))/125 - (3*qD(2)*qD(3)*sin(q(3) + q(4)))/125 - (3*qD(2)*qD(4)*sin(q(3) + q(4)))/125 - (qD(1)*qD(4)*sin(q(4) + q(5)))/125 - (3*qD(3)*qD(4)*sin(q(3) + q(4)))/125 - (qD(1)*qD(5)*sin(q(4) + q(5)))/125 - (qD(2)*qD(4)*sin(q(4) + q(5)))/125 - (qD(2)*qD(5)*sin(q(4) + q(5)))/125 - (qD(3)*qD(4)*sin(q(4) + q(5)))/125 - (qD(3)*qD(5)*sin(q(4) + q(5)))/125 - (qD(4)*qD(5)*sin(q(4) + q(5)))/125;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          (3*qD(1)^2*sin(q(4)))/250 + (3*qD(2)^2*sin(q(4)))/250 + (3*qD(3)^2*sin(q(4)))/250 - (qD(5)^2*sin(q(5)))/250 + (3*qD(1)^2*sin(q(2) + q(3) + q(4)))/250 + (qD(1)^2*sin(q(3) + q(4) + q(5)))/250 + (qD(2)^2*sin(q(3) + q(4) + q(5)))/250 + (qD(1)^2*sin(q(2) + q(3) + q(4) + q(5)))/250 + (3*qD(1)^2*sin(q(3) + q(4)))/250 + (3*qD(2)^2*sin(q(3) + q(4)))/250 + (qD(1)^2*sin(q(4) + q(5)))/250 + (qD(2)^2*sin(q(4) + q(5)))/250 + (qD(3)^2*sin(q(4) + q(5)))/250 + (3*qD(1)*qD(2)*sin(q(4)))/125 + (3*qD(1)*qD(3)*sin(q(4)))/125 + (3*qD(2)*qD(3)*sin(q(4)))/125 - (qD(1)*qD(5)*sin(q(5)))/125 - (qD(2)*qD(5)*sin(q(5)))/125 - (qD(3)*qD(5)*sin(q(5)))/125 - (qD(4)*qD(5)*sin(q(5)))/125 + (qD(1)*qD(2)*sin(q(3) + q(4) + q(5)))/125 + (3*qD(1)*qD(2)*sin(q(3) + q(4)))/125 + (qD(1)*qD(2)*sin(q(4) + q(5)))/125 + (qD(1)*qD(3)*sin(q(4) + q(5)))/125 + (qD(2)*qD(3)*sin(q(4) + q(5)))/125];
-
-    h = [- (981*cos(q(1) + q(2) + q(3)))/1000 - (2943*cos(q(1) + q(2) + q(3) + q(4)))/5000 - (6867*cos(q(1) + q(2)))/5000 - (8829*cos(q(1)))/5000 - (981*cos(q(1) + q(2) + q(3) + q(4) + q(5)))/5000;
-                                                      - (981*cos(q(1) + q(2) + q(3)))/1000 - (2943*cos(q(1) + q(2) + q(3) + q(4)))/5000 - (981*cos(q(1) + q(2) + q(3) + q(4) + q(5)))/5000;
-                                                                                                                           -(981*cos(q(1) + q(2) + q(3) + q(4) + q(5)))/5000;
-                           - (981*cos(q(1) + q(2) + q(3)))/1000 - (2943*cos(q(1) + q(2) + q(3) + q(4)))/5000 - (6867*cos(q(1) + q(2)))/5000 - (981*cos(q(1) + q(2) + q(3) + q(4) + q(5)))/5000;
-                                                                                     - (2943*cos(q(1) + q(2) + q(3) + q(4)))/5000 - (981*cos(q(1) + q(2) + q(3) + q(4) + q(5)))/5000];
-
-
-
-
-
- 
-    %%%%%%%%%%%%%%%%%%%VARIABLES REORDERING
-    q = reorderingMatrix(q, active_joints)
-    qD = reorderingMatrix(qD, active_joints);
-    
-    B = reorderingMatrix(B, active_joints);
-    C = reorderingMatrix(C, active_joints);
-    h = reorderingMatrix(h, active_joints);
-
     B11 = B(1:n_joints_unactive,1:n_joints_unactive);
     B12 = B(1:n_joints_unactive,n_joints_unactive+1:n_joints);
     B21 = B(n_joints_unactive+1:n_joints,1:n_joints_unactive);
@@ -161,64 +145,27 @@ for t=1:totalIterations
     h2 = h(n_joints_unactive+1:n_joints);
 
 
+
     %%%%%%%%%%%%%%%%TASK TERMS COMPUTATION
     
-    comPos = (pc1 + pc2 + pc3 + pc4 + pc5)/n_joints;
-    comAngle = atan2(comPos(2),comPos(1));
-    comLength = norm(comPos);
+    task = taskFunc(q(1),q(2),q(3),q(4),q(5));
+
+    J = JFunc(q(1),q(2),q(3),q(4),q(5));
     
-    task = [comAngle; comLength];
-    if (t == 1)%%USATO PER DIFF CHE ORA NON C'E'
-        oldTask = task - 0.01;
-    end
-    %Already Ordered!!!
-    J = [ 1, (27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 21*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 35*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 35)/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165),         (7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 5*cos(q(4) + q(5)) + 3*cos(q(5)) + 1)/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165), (27*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 63*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 84)/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165), (27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 21*cos(q(3) + q(4)) + 5*cos(q(4) + q(5)) + 15*cos(q(4)) + 6*cos(q(5)) + 10)/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165);
-     0,                                     -(27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 21*sin(q(3) + q(4)) + 35*sin(q(3)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)), -(7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 5*sin(q(4) + q(5)) + 3*sin(q(5)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)),                                                                                           -(27*sin(q(2) + q(3) + q(4)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 63*sin(q(2)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)),      -(27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 21*sin(q(3) + q(4)) + 5*sin(q(4) + q(5)) + 15*sin(q(4)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2))];
-
-
-
-    
-    %QUI PRIMA MOLTIPLICAVA SOLO PER QD non ordinato, ora qD ? ordinato
     taskDot = J * qD;
- 
 
-    J1dq = [ 0,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     0,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 0,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    0,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     0;
-     0,                ((54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 42*sin(q(3) + q(4)) + 70*sin(q(3)))*(27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 21*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 35*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 35))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 21*sin(q(3) + q(4)) + 35*sin(q(3)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165),                ((14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 10*sin(q(4) + q(5)) + 6*sin(q(5)))*(27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 21*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 35*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 35))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 10*sin(q(4) + q(5)) + 6*sin(q(5)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165),                            ((54*sin(q(2) + q(3) + q(4)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 126*sin(q(2)))*(27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 21*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 35*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 35))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (27*sin(q(2) + q(3) + q(4)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165),                ((54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 42*sin(q(3) + q(4)) + 10*sin(q(4) + q(5)) + 30*sin(q(4)))*(27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 21*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 35*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 35))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 21*sin(q(3) + q(4)) + 10*sin(q(4) + q(5)) + 30*sin(q(4)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165);
-     0,                                                                                                                                                                               ((7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 5*cos(q(4) + q(5)) + 3*cos(q(5)) + 1)*(54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 42*sin(q(3) + q(4)) + 70*sin(q(3))))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165),                                                                                                        ((14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 10*sin(q(4) + q(5)) + 6*sin(q(5)))*(7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 5*cos(q(4) + q(5)) + 3*cos(q(5)) + 1))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 5*sin(q(4) + q(5)) + 3*sin(q(5)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165),                                                                                                                                                            ((54*sin(q(2) + q(3) + q(4)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 126*sin(q(2)))*(7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 5*cos(q(4) + q(5)) + 3*cos(q(5)) + 1))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (9*sin(q(2) + q(3) + q(4) + q(5)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165),                                                                                                                                                              ((7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 5*cos(q(4) + q(5)) + 3*cos(q(5)) + 1)*(54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 42*sin(q(3) + q(4)) + 10*sin(q(4) + q(5)) + 30*sin(q(4))))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 5*sin(q(4) + q(5)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165);
-     0, ((54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 42*sin(q(3) + q(4)) + 70*sin(q(3)))*(27*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 63*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 84))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (27*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 42*sin(q(3) + q(4)) + 70*sin(q(3)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165), ((14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 10*sin(q(4) + q(5)) + 6*sin(q(5)))*(27*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 63*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 84))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (14*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 10*sin(q(4) + q(5)) + 6*sin(q(5)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165), ((54*sin(q(2) + q(3) + q(4)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 126*sin(q(2)))*(27*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 63*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 84))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (27*sin(q(2) + q(3) + q(4)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 63*sin(q(2)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165), ((54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 42*sin(q(3) + q(4)) + 10*sin(q(4) + q(5)) + 30*sin(q(4)))*(27*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 63*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 84))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (27*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 42*sin(q(3) + q(4)) + 10*sin(q(4) + q(5)) + 30*sin(q(4)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165);
-     0,                                                                               ((54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 42*sin(q(3) + q(4)) + 70*sin(q(3)))*(27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 21*cos(q(3) + q(4)) + 5*cos(q(4) + q(5)) + 15*cos(q(4)) + 6*cos(q(5)) + 10))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 21*sin(q(3) + q(4)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165),                                                 ((14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 10*sin(q(4) + q(5)) + 6*sin(q(5)))*(27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 21*cos(q(3) + q(4)) + 5*cos(q(4) + q(5)) + 15*cos(q(4)) + 6*cos(q(5)) + 10))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 5*sin(q(4) + q(5)) + 6*sin(q(5)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165),                                                                              ((54*sin(q(2) + q(3) + q(4)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 126*sin(q(2)))*(27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 21*cos(q(3) + q(4)) + 5*cos(q(4) + q(5)) + 15*cos(q(4)) + 6*cos(q(5)) + 10))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (27*sin(q(2) + q(3) + q(4)) + 9*sin(q(2) + q(3) + q(4) + q(5)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165),                                                 ((54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 42*sin(q(3) + q(4)) + 10*sin(q(4) + q(5)) + 30*sin(q(4)))*(27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 21*cos(q(3) + q(4)) + 5*cos(q(4) + q(5)) + 15*cos(q(4)) + 6*cos(q(5)) + 10))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^2 - (27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 21*sin(q(3) + q(4)) + 5*sin(q(4) + q(5)) + 15*sin(q(4)))/(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)];
-
-
-
-
-    J2dq = [ 0,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             0,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           0,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                0,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           0;
-     0, - (27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 21*cos(q(3) + q(4)) + 35*cos(q(3)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 21*sin(q(3) + q(4)) + 35*sin(q(3)))*(54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 42*sin(q(3) + q(4)) + 70*sin(q(3))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2)),                 - (7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 10*sin(q(4) + q(5)) + 6*sin(q(5)))*(27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 21*sin(q(3) + q(4)) + 35*sin(q(3))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2)), - (27*cos(q(2) + q(3) + q(4)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((54*sin(q(2) + q(3) + q(4)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 126*sin(q(2)))*(27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 21*sin(q(3) + q(4)) + 35*sin(q(3))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2)),                              - (27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 21*cos(q(3) + q(4)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 21*sin(q(3) + q(4)) + 35*sin(q(3)))*(54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 42*sin(q(3) + q(4)) + 10*sin(q(4) + q(5)) + 30*sin(q(4))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2));
-     0,                                                                                                                    - (7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 5*sin(q(4) + q(5)) + 3*sin(q(5)))*(54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 42*sin(q(3) + q(4)) + 70*sin(q(3))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2)),                               - (7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 5*cos(q(4) + q(5)) + 3*cos(q(5)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 5*sin(q(4) + q(5)) + 3*sin(q(5)))*(14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 10*sin(q(4) + q(5)) + 6*sin(q(5))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2)),                                                                                     - (9*cos(q(2) + q(3) + q(4) + q(5)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 5*sin(q(4) + q(5)) + 3*sin(q(5)))*(54*sin(q(2) + q(3) + q(4)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 126*sin(q(2))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2)),                                                                                                 - (7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 5*cos(q(4) + q(5)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 5*sin(q(4) + q(5)) + 3*sin(q(5)))*(54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 42*sin(q(3) + q(4)) + 10*sin(q(4) + q(5)) + 30*sin(q(4))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2));
-     0,                                                                                              - (27*cos(q(2) + q(3) + q(4)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((27*sin(q(2) + q(3) + q(4)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 63*sin(q(2)))*(54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 42*sin(q(3) + q(4)) + 70*sin(q(3))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2)),                                                                               - (9*cos(q(2) + q(3) + q(4) + q(5)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 10*sin(q(4) + q(5)) + 6*sin(q(5)))*(27*sin(q(2) + q(3) + q(4)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 63*sin(q(2))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2)),                            - (27*cos(q(2) + q(3) + q(4)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 45*cos(q(2) + q(3)) + 63*cos(q(2)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((27*sin(q(2) + q(3) + q(4)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 63*sin(q(2)))*(54*sin(q(2) + q(3) + q(4)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 126*sin(q(2))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2)),                                                                                                              - (27*cos(q(2) + q(3) + q(4)) + 9*cos(q(2) + q(3) + q(4) + q(5)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((27*sin(q(2) + q(3) + q(4)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 45*sin(q(2) + q(3)) + 63*sin(q(2)))*(54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 42*sin(q(3) + q(4)) + 10*sin(q(4) + q(5)) + 30*sin(q(4))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2));
-     0,                                 - (27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 21*cos(q(3) + q(4)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 21*sin(q(3) + q(4)) + 5*sin(q(4) + q(5)) + 15*sin(q(4)))*(54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 42*sin(q(3) + q(4)) + 70*sin(q(3))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2)), - (7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 5*cos(q(4) + q(5)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 10*sin(q(4) + q(5)) + 6*sin(q(5)))*(27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 21*sin(q(3) + q(4)) + 5*sin(q(4) + q(5)) + 15*sin(q(4))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2)),                    - (27*cos(q(2) + q(3) + q(4)) + 9*cos(q(2) + q(3) + q(4) + q(5)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((54*sin(q(2) + q(3) + q(4)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 90*sin(q(2) + q(3)) + 126*sin(q(2)))*(27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 21*sin(q(3) + q(4)) + 5*sin(q(4) + q(5)) + 15*sin(q(4))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2)), - (27*cos(q(2) + q(3) + q(4)) + 7*cos(q(3) + q(4) + q(5)) + 9*cos(q(2) + q(3) + q(4) + q(5)) + 21*cos(q(3) + q(4)) + 5*cos(q(4) + q(5)) + 15*cos(q(4)))/(50*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(1/2)) - ((27*sin(q(2) + q(3) + q(4)) + 7*sin(q(3) + q(4) + q(5)) + 9*sin(q(2) + q(3) + q(4) + q(5)) + 21*sin(q(3) + q(4)) + 5*sin(q(4) + q(5)) + 15*sin(q(4)))*(54*sin(q(2) + q(3) + q(4)) + 14*sin(q(3) + q(4) + q(5)) + 18*sin(q(2) + q(3) + q(4) + q(5)) + 42*sin(q(3) + q(4)) + 10*sin(q(4) + q(5)) + 30*sin(q(4))))/(100*(54*cos(q(2) + q(3) + q(4)) + 14*cos(q(3) + q(4) + q(5)) + 18*cos(q(2) + q(3) + q(4) + q(5)) + 90*cos(q(2) + q(3)) + 42*cos(q(3) + q(4)) + 10*cos(q(4) + q(5)) + 126*cos(q(2)) + 70*cos(q(3)) + 30*cos(q(4)) + 6*cos(q(5)) + 165)^(3/2))];
-
-
-
-    Jdot = [qD' * J1dq;
-            qD' * J2dq];
-    
-        
+   Jdot = JdotFunc(q(1),q(2),q(3),q(4),q(5),qD(1),qD(2),qD(3),qD(4),qD(5));
+     
     J1 = J(:,1:n_joints_unactive);
     J2 = J(:,n_joints_unactive+1:n_joints);    
-        
-    
-    
-
-    %task state ha dimensione 2x3, come goal. L'ultima colonna inutile serve per fare
-    %combaciare le dimensioni.
-  
-  task
-  taskDot
-    
-    
+            
     taskStorage(t,:) = [task' taskDot'];
-
     
+    %Riordino qua, altrimenti avrei problemi ad assegnare parametri alle
+    %funzioni
+    q = reorderingMatrix(q, active_joints);
+    qD = reorderingMatrix(qD, active_joints);
+
     
     currentAngleMat = [cos(task(1)), - sin(task(1)); sin(task(1)), cos(task(1))];
     referenceAngleMat = [cos(goal(1,1)), - sin(goal(1,1)); sin(goal(1,1)), cos(goal(1,1))];
@@ -227,26 +174,28 @@ for t=1:totalIterations
     
     errorVec = [errorAngleScalar;
                 (task(2))- goal(2,1)];
-    
-    vA = goal(:,3) + Kd*(goal(:,2) - taskDot) + Kp*errorVec
+            
+    errorStorage(t,:) = errorVec';
+            
+    vA = goal(:,3) + Kd*(goal(:,2) - taskDot) + Kp*errorVec;
  
     %JbarCurrent = J2 -J1*(B11\B12);
-    JbarCurrent = J2 - J1*(inv(B11)*B12)
+    JbarCurrent = J2 - J1*(inv(B11)*B12);
     
     
     JbarPinvCurrent = pinv(JbarCurrent);
     
  
     %q2DDCurrent = JbarPinv * (v - Jdot*qD + J1*(B11\(C1 + h1)));
-    q2DDCurrent = JbarPinvCurrent * (vA - Jdot*qD + J1*inv(B11)*(C1 + h1))
+    q2DDCurrent = JbarPinvCurrent * (vA - Jdot*qD + J1*inv(B11)*(C1 + h1));
     
     %q1DDCurrent = -B11\(B12*q2DD_ordered + C1 + h1);
-    q1DDCurrent = -inv(B11)*(B12*q2DDCurrent + C1 + h1)
+    q1DDCurrent = -inv(B11)*(B12*q2DDCurrent + C1 + h1);
     
-    tauCurrent = B21*q1DDCurrent + B22*q2DDCurrent + C2 + h2
+    tauCurrent = B21*q1DDCurrent + B22*q2DDCurrent + C2 + h2;
     
     %show2 = (B22 - B21*(B11\B12))\(tauCurrent + B21*(B11\(C1 + h1)) - C2 - h2);
-    %show2 = inv( - B21*inv(B11)*B12 + B22)*(tauCurrent + B21*inv(B11)*(C1 + h1) - C2-h2);
+    %show2 = inv( - B21*inv(B11)*B12 + B22)*(tauCurrent + B21*inv(B11)*(C1 + h1) - C2-h2)
     
     for i=1:size(tauCurrent,1)
         if (tauCurrent(i) > tauLimit)
@@ -262,8 +211,8 @@ for t=1:totalIterations
     if (tauViolated==true)
        disp('tauViolated');
        %q2DDCurrent = (B22 - B21*(B11\B12))\(tauCurrent + B21*(B11\(C1 + h1)) - C2 - h2);
-       q2DDCurrent = inv( - B21*inv(B11)*B12 + B22)*(tauCurrent + B21*inv(B11)*(C1 + h1) - C2-h2)
-       q1DDCurrent = -inv(B11)*(B12*q2DDCurrent + C1 + h1)
+       q2DDCurrent = inv( - B21*inv(B11)*B12 + B22)*(tauCurrent + B21*inv(B11)*(C1 + h1) - C2-h2);
+       q1DDCurrent = -inv(B11)*(B12*q2DDCurrent + C1 + h1);
 
     end
 
@@ -272,6 +221,7 @@ for t=1:totalIterations
     
     
     %%%%%%%%%%%%%%%INTEGRATION
+    oldQD = qD;
     qD = qD + [q1DDCurrent; q2DDCurrent]*deltaT;
 
     for i=1:(n_joints-n_joints_unactive)             
@@ -284,48 +234,25 @@ for t=1:totalIterations
     end
     
     
-    q = mod(q + qD*deltaT + (1/2)*[q1DDCurrent; q2DDCurrent]*deltaT^2, 2*pi);
+    q = mod(q + oldQD*deltaT + (1/2)*[q1DDCurrent; q2DDCurrent]*deltaT^2, 2*pi);
 
      q = INVorder(q,active_joints);
      qD = INVorder(qD,active_joints);
-     oldTask = task;
-    toc
 
 end
 
   
 
 
+timeStorage = deltaT:deltaT:totalSeconds;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+figure
+title('Error Evolution');
+xlabel('Time');
+ylabel('ERROR');
+subplot(2,1,1)
+plot(timeStorage,errorStorage(:,1)');
+subplot(2,1,2)
+plot(timeStorage,errorStorage(:,2)');
 
 

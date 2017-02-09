@@ -2,20 +2,17 @@ clear all
 clc
 
 %Robot parameters
-m1 = 0.2;
-m2 = 0.2;
-
+m1 = 0.05;
+m2 = 0.05;
+I1 = 1/20;
+I2 = 1/20;
+lc1 = 0.1;
+lc2 = 0.1;
 l1 = 0.2;
-l2 = 0.3;
+l2 = 0.2;
 
-lc1 = l1/2;
-lc2 = l2/2;
-
-I1 = m1*(l1^2)/3;
-I2 = m2*(l2^2)/3;
 
 g0 = 9.81;
-
 
 syms q1 q2 q1D q2D real;
 
@@ -31,21 +28,23 @@ iacobianaDot = (jacobian(iacobiana,[q1;q2])*[q1D;q2D])';
 iacobDotFunc = matlabFunction(iacobianaDot);
 
 
-
-oldState = [-pi/3 0 0 0]';
+oldState = [-pi/2 0 0 0]';
 newState = [0 0 0 0]';
 
 %0 refers to the desired acceleration
-goal = [pi/2 0 0];
- 
-Kd = 25  ;
-Kp = 350;
-deltaT = 1/1000;
-totalT = 30;
-saturationQ2D = 100 ;
+goal = [1  0 0];
+
+Kd = 3;
+Kp = 5;
+deltaT = 15/1000;
+totalT = 15;
+saturationQ2D = 100;
 tauLimit = 100;
 jointLimitQ1 = pi;
 jointLimitQ2 = pi;
+
+
+
 
 
 totalIterations = ceil(totalT/deltaT);
@@ -53,7 +52,6 @@ stateStorage = zeros(totalIterations,2);
 stateStorage2 = zeros(totalIterations,6);
 taskStorage = zeros(totalIterations,1);
 errorStorage = zeros(totalIterations,1);
-tauStorage = zeros(totalIterations,1);
 indexStorage = 0;
 
 for t=0:deltaT:totalT
@@ -84,23 +82,16 @@ g = g0*[(m1*lc1 + m2*l1)*cos(oldState(1)) + m2*lc2*cos(oldState(1)+oldState(2));
         m2*lc2*cos(oldState(1)+oldState(2))];
 
     
-%Task space definition    
-%comPos = [(lc1*cos(oldState(1)) + l1*cos(oldState(1)) + lc2*cos(oldState(1)+oldState(2)))/2;
-%    (lc1*sin(oldState(1)) + l1*sin(oldState(1)) + lc2*sin(oldState(1)+oldState(2)))/2];
-%EEPos = [l1*cos(oldState(1)) + l2*cos(oldState(2));
-%         l1*sin(oldState(1)) + l2*sin(oldState(2))];
-%
-%EEAngle = atan2(EEPos(2),EEPos(1));     
-%comAngle = atan2(comPos(2), comPos(1));
 
 task = taskFunc(oldState(1),oldState(2));
- 
+
 
 %Jacobian Definition
 
 J = iacobFunc(oldState(1),oldState(2));
+%J = [ 1, (3*cos(oldState(2)) + 1)/(6*cos(oldState(2)) + 10)];
  
-Jbar = J(2) - J(1)*inv(M(1,1))*M(1,2);
+Jbar = J(1) - J(2)*inv(M(2,2))*M(1,2);
 
 JbarPinv = pinv(Jbar);
 
@@ -121,22 +112,21 @@ taskDot = J*[oldState(3);oldState(4)];
     errorMat = (actualMat)\referenceMat;
     errorVec = atan2(errorMat(2,1),errorMat(1,1));
     
-        errorStorage(indexStorage) = errorVec;
+    errorStorage(indexStorage) = errorVec;
     
     vA = goal(3) + Kd*(goal(2) - taskDot) + Kp*errorVec;
 
     
     
-    q2DDActual = JbarPinv*(vA -Jdot*[oldState(3);oldState(4)] + J(1)*inv(M(1,1))*(C(1) + g(1)));
+    q1DDActual = JbarPinv*(vA -Jdot*[oldState(3);oldState(4)] + J(2)*inv(M(2,2))*(C(2) + g(2)));
    
     
-    q1DDActual = -inv(M(1,1))*(M(1,2)*q2DDActual + C(1) + g(1));
+    q2DDActual = -inv(M(2,2))*(M(1,2)*q1DDActual + C(2) + g(2));
 
     stateStorage2(indexStorage,:) = [oldState', q1DDActual,q2DDActual];
     
     
-    tauActual = M(2,1)*q1DDActual + M(2,2)*q2DDActual + C(2) + g(2);
-    tauStorage(indexStorage) = tauActual;
+    tauActual = M(1,1)*q1DDActual + M(2,2)*q2DDActual + C(1) + g(1);
 
 
     if (tauActual > tauLimit)
@@ -148,8 +138,8 @@ taskDot = J*[oldState(3);oldState(4)];
     end
     
     if (tauViolated == true)
-     q2DDActual = inv(-M(2,1)*inv(M(1,1))*M(1,2) + M(2,2))*(tauActual + M(2,1)*inv(M(1,1))*(C(1)+g(1))- C(2)-g(2));   
-     q1DDActual = -inv(M(1,1))*(M(1,2)*q2DDActual + C(1) + g(1));
+     q1DDActual = inv(-M(2,1)*inv(M(2,2))*M(1,2) + M(1,1))*(tauActual + M(2,1)*inv(M(2,2))*(C(2)+g(2))- C(1)-g(1));   
+     q2DDActual = -inv(M(2,2))*(M(1,2)*q1DDActual + C(2) + g(2));
     end
       
   
@@ -158,11 +148,11 @@ taskDot = J*[oldState(3);oldState(4)];
     newState(3:4) = [oldState(3) + q1DDActual*deltaT;
                     oldState(4) + q2DDActual*deltaT];
                 
-    if (newState(4)> saturationQ2D)
-        newState(4) = saturationQ2D;
+    if (newState(3)> saturationQ2D)
+        newState(3) = saturationQ2D;
         
-    elseif (newState(4)< - saturationQ2D)
-            newState(4) = - saturationQ2D;
+    elseif (newState(3)< - saturationQ2D)
+            newState(3 ) = - saturationQ2D;
     end
     
 
@@ -206,25 +196,8 @@ legend([link1,link2], 'UNACTUATED','ACTUATED')
 
 x0 = [0,0]; %Origin of the base link
 
-timeStorage = linspace(0,totalT,totalIterations+1)';
-
-figure
-title('Error Evolution');
-xlabel('Time');
-ylabel('ERROR');
-plot(timeStorage,errorStorage);
-
-figure
-title('TAU Evolution');
-xlabel('Time');
-ylabel('TAU');
-plot(timeStorage,tauStorage);
-
-
-
-
-for i=1:10: size(stateStorage,1)
-    x1 = [l1*cos(stateStorage(i,1)), l1*sin(stateStorage(i,1))];
+for i=1:size(stateStorage,1)
+    x1 = [l1*cos(stateStorage(i,1)), l2*sin(stateStorage(i,1))];
     x2 = x1 + [l2*cos(stateStorage(i,1) + stateStorage(i,2)),l2*sin(stateStorage(i,1) + stateStorage(i,2))];
     
     set(link1,'XData',[x0(1),x1(1)], 'YData',[x0(2),x1(2)] )
@@ -235,10 +208,19 @@ for i=1:10: size(stateStorage,1)
     
     drawnow;
     
-    %pause(deltaT/2);
+    pause(deltaT/2);
     
     
 end
+
+
+timeStorage = linspace(0,totalT,totalIterations+1)';
+
+figure
+title('Error Evolution');
+xlabel('Time');
+ylabel('ERROR');
+plot(timeStorage,errorStorage);
 
 
 
