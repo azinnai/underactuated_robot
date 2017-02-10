@@ -11,6 +11,7 @@ lc = 0.1;
 n_joints = 5;
 active_joints = [0;1;1;1;1];
 n_joints_unactive = sum(active_joints(:) ==0);
+n_joints_active = n_joints - n_joints_unactive;
 %%%%%%%%%%%%%%%%INITIAL STATE AND GOAL
 q = [-pi/2; 0; 0; 0; 0];
 qD = [0; 0; 0; 0; 0];
@@ -21,7 +22,7 @@ goal = [pi/2 0 0;
 Kd = 1;
 Kp = 1;
 deltaT = 0.001;
-totalSeconds = 10;
+totalSeconds = 2;
 totalIterations = totalSeconds/deltaT;
 saturationQD = 5;
 tauLimit = 2;
@@ -118,8 +119,10 @@ JdotFunc = matlabFunction(JdotSymbols);%@(q1,q2,q3,q4,q5,q1D,q2D,q3D,q4D,q5D)
 stateStorage = zeros(totalIterations,n_joints*2);
 taskStorage = zeros(totalIterations,4);
 errorStorage = zeros(totalIterations,2);
+tauStorage = zeros(totalIterations,n_joints_active);
 
 disp('Beginning simulation loop');
+
 
 %%%%%%%%%%%%%%%%CONTROL LOOP
 for t=1:totalIterations
@@ -145,8 +148,6 @@ for t=1:totalIterations
     h2 = h(n_joints_unactive+1:n_joints);
 
 
-
-    %%%%%%%%%%%%%%%%TASK TERMS COMPUTATION
     
     task = taskFunc(q(1),q(2),q(3),q(4),q(5));
 
@@ -207,7 +208,8 @@ for t=1:totalIterations
         end
     end
 
-
+    tauStorage(t,:) = tauCurrent';
+    
     if (tauViolated==true)
        disp('tauViolated');
        %q2DDCurrent = (B22 - B21*(B11\B12))\(tauCurrent + B21*(B11\(C1 + h1)) - C2 - h2);
@@ -254,5 +256,84 @@ subplot(2,1,1)
 plot(timeStorage,errorStorage(:,1)');
 subplot(2,1,2)
 plot(timeStorage,errorStorage(:,2)');
+
+figure
+title('TAU Evolution');
+xlabel('Time');
+ylabel('TAU');
+legend;
+plot(timeStorage,tauStorage);
+
+
+
+pause %Wait spacebar press to start real-time simulation 
+
+figure
+figureLimits = l*5 + l/2;
+xlim([-figureLimits,figureLimits]);
+ylim([-figureLimits,figureLimits]);
+
+ax = gca;
+task_text = text(ax.XLim(1),ax.YLim(2),'');
+task_text.FontSize = 14;
+task_text.FontWeight = 'bold';
+
+time_text = text(ax.XLim(1),ax.YLim(1),'');
+time_text.FontSize = 14;
+time_text.FontWeight = 'bold';
+
+link1 = line('LineWidth',2.5,'Color','r');
+if (active_joints(1) == 0)
+    link1.Color = 'b';
+end
+link2 = line('LineWidth',2.5,'Color','r');
+if (active_joints(2) == 0)
+    link1.Color = 'b';
+end
+link3 = line('LineWidth',2.5,'Color','r');
+if (active_joints(3) == 0)
+    link1.Color = 'b';
+end
+link4 = line('LineWidth',2.5,'Color','r');
+if (active_joints(4) == 0)
+    link1.Color = 'b';
+end
+link5 = line('LineWidth',2.5,'Color','r');
+if (active_joints(5) == 0)
+    link1.Color = 'b';
+end
+
+
+x0 = [0,0]; %Origin of the base link
+
+
+for i=1:10: size(stateStorage,1)
+    x1 = [l*cos(stateStorage(i,1)), l*sin(stateStorage(i,1))];
+    x2 = x1 + [l*cos(stateStorage(i,1) + stateStorage(i,2)),l*sin(stateStorage(i,1) + stateStorage(i,2))];
+    x3 = x2 + [l*cos(stateStorage(i,1) + stateStorage(i,2) + stateStorage(i,3)),l*sin(stateStorage(i,1) + stateStorage(i,2)+ stateStorage(i,3))];
+    x4 = x3 + [l*cos(stateStorage(i,1) + stateStorage(i,2) + stateStorage(i,3) + stateStorage(i,4)),l*sin(stateStorage(i,1) + stateStorage(i,2)+ stateStorage(i,3)+ stateStorage(i,4))];
+    x5 = x4 + [l*cos(stateStorage(i,1) + stateStorage(i,2) + stateStorage(i,3) + stateStorage(i,4)+ stateStorage(i,5)),l*sin(stateStorage(i,1) + stateStorage(i,2)+ stateStorage(i,3)+ stateStorage(i,4)+ stateStorage(i,5))];
+    
+    set(link1,'XData',[x0(1),x1(1)], 'YData',[x0(2),x1(2)])
+    set(link2,'XData',[x1(1),x2(1)], 'YData',[x1(2),x2(2)])
+    set(link3,'XData',[x2(1),x3(1)], 'YData',[x2(2),x3(2)])
+    set(link4,'XData',[x3(1),x4(1)], 'YData',[x3(2),x4(2)])
+    set(link5,'XData',[x4(1),x5(1)], 'YData',[x4(2),x5(2)])
+    
+    task_text.String = strcat(mat2str(double(vpa(taskStorage(i,1),3)),3),' COM Angle ',mat2str(double(vpa(taskStorage(i,2),3)),3),' COM Lenght');
+    time_text.String = mat2str(i*deltaT);
+    
+    drawnow;
+    
+    %pause(deltaT/2);
+    
+    
+end
+
+
+
+
+
+
 
 
