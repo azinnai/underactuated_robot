@@ -22,7 +22,7 @@ goal = [pi/2 0 0;
 Kd = 1;
 Kp = 1;
 deltaT = 0.001;
-totalSeconds = 2;
+totalSeconds = 10;
 totalIterations = totalSeconds/deltaT;
 saturationQD = 5;
 tauLimit = 2;
@@ -105,13 +105,13 @@ taskFunc = matlabFunction(taskSymbols);% @(q1,q2,q3,q4,q5)
 JSymbols = jacobian(taskSymbols, qSymbols_ordered);
 JFunc = matlabFunction(JSymbols);% @(q1,q2,q3,q4,q5)
 
-Jdq1 = jacobian(JSymbols(:,1),qSymbols_ordered(1));
-Jdq2 = jacobian(JSymbols(:,2),qSymbols_ordered(2));
-Jdq3 = jacobian(JSymbols(:,3),qSymbols_ordered(3));
-Jdq4 = jacobian(JSymbols(:,4),qSymbols_ordered(4));
-Jdq5 = jacobian(JSymbols(:,5),qSymbols_ordered(5));
+Jdq1 = jacobian(JSymbols(:,1),qSymbols_ordered);
+Jdq2 = jacobian(JSymbols(:,2),qSymbols_ordered);
+Jdq3 = jacobian(JSymbols(:,3),qSymbols_ordered);
+Jdq4 = jacobian(JSymbols(:,4),qSymbols_ordered);
+Jdq5 = jacobian(JSymbols(:,5),qSymbols_ordered);
 
-JdotSymbols = [Jdq1*qDSymbols_ordered(1),Jdq2*qDSymbols_ordered(2),Jdq3*qDSymbols_ordered(3),Jdq4*qDSymbols_ordered(4),Jdq5*qDSymbols_ordered(5) ];
+JdotSymbols = [Jdq1*qDSymbols_ordered,Jdq2*qDSymbols_ordered,Jdq3*qDSymbols_ordered,Jdq4*qDSymbols_ordered,Jdq5*qDSymbols_ordered];
 JdotFunc = matlabFunction(JdotSymbols);%@(q1,q2,q3,q4,q5,q1D,q2D,q3D,q4D,q5D)
 
 
