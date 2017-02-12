@@ -14,8 +14,8 @@ n_joints_unactive = sum(active_joints(:) ==0);
 n_joints_active = n_joints - n_joints_unactive;
 
 
-depthTree = 4;
-maxBranching = 20;
+depthTree = 3;
+maxBranching = 5;
 threshold = 0.25;
 deltaTPlanning = 0.15;
 
@@ -35,12 +35,12 @@ tauLimit = 2;
 jointLimitQ = pi;
 
 
-createMatlabFunctions(m,l,I,lc,active_joints);
+%createMatlabFunctions(m,l,I,lc,active_joints);
 
-primitives = [0.1, 0; -0.1, 0; 0, 0.1; 0, -0.1; 0.1, 0.1; 0.1, -0.1; -0.1, 0.1; -0.1,-0.1];
+primitives = [0.1, 0; -0.1, 0; 0, 0.1; 0, -0.1; 0.1, 0.1; 0.1, -0.1; -0.1, 0.1; -0.1,-0.1; 0 , 0];
 
 
-simplePlanning([q', qD'],[goal(1,:), goal(2,:)], primitives, tauLimit, jointLimitQ, active_joints,depthTree, maxBranching, threshold, deltaTPlanning);
+simplePlanning([q', qD'],goal, primitives, tauLimit, jointLimitQ, active_joints,depthTree, maxBranching, threshold, deltaTPlanning);
 
 
 

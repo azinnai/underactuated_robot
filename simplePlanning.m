@@ -1,4 +1,4 @@
-function  simplePlanning(qStart, taskGoal, motionPrimitiveCommandArray, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaT)
+function  simplePlanning(qStart, taskGoal, motionPrimitiveArray, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaT)
 
 
 
@@ -26,7 +26,7 @@ graph.vectorEdges = {};                             % list of edges; each edge r
 %                          else
 %                            graph.vectorEdges(abs(e)) is the oriented path connecting graph.verts(j,:) to graph.verts(i,:) in the C-space manifold
 %                          end
-nPrimitives = size(motionPrimitiveCommandArray,1); % number of motion primitives
+nPrimitives = size(motionPrimitiveArray,1); % number of motion primitives
 
 graph.verts(1,:) = qStart; % insert first vertex
 
@@ -43,11 +43,11 @@ for s = 1:depthTree
         for i=first:last
             for j=1:nPrimitives
 
-               newNode = checkConstraints(graph.verts(i,:),motionPrimitiveCommandArray(j,:)', deltaT, tauLimit, jointLimitQ, active_joints);
+               newNode = checkConstraints(graph.verts(i,:),motionPrimitiveArray(j,:)', deltaT, tauLimit, jointLimitQ, active_joints);
 
                if (newNode ~= 9999)
                    storage(end+1,:) = newNode;
-                   parents(size(storage,1)) = i;
+                   parents(end+1) = i;
                end
             end
         end
@@ -57,7 +57,12 @@ for s = 1:depthTree
             J = JFunc(storage(i,1),storage(i,2),storage(i,3),storage(i,4),storage(i,5));
             taskDotValue = J* storage(i,6:10)';
             
-            dist = norm([taskValue; taskDotValue] - taskGoal');
+            angleDiff = boxMinus(taskValue(1), taskGoal(1,1));
+            lengthDiff = taskValue(2) - taskGoal(2,1);
+            speedDiff = taskDotValue - taskGoal(:,2);
+            
+            dist = norm([angleDiff;lengthDiff;speedDiff]);
+            
             if (dist <= threshold)
                 disp('WIN!!!!!');%IMPLEMENTARE FUNZIONE DISTANZA
                 search = false;
@@ -71,10 +76,9 @@ for s = 1:depthTree
     
 
         if (size(storage,1) >maxBranching)
-             conservedNodes = ones(size(storage,1),1);%DA CANCELLARE
-            %PRUNING
+             conservedNodes = pruningFunction(storage, taskGoal, maxBranching)
         else
-            conservedNodes = ones(size(storage,1),1);
+            conservedNodes = ones(size(storage,1),1)
         end
 
         for i=1:size(storage,1)
@@ -85,7 +89,7 @@ for s = 1:depthTree
             end
         end
 
-    addedNodes = sum(conservedNodes(:) ==1)
+    addedNodes = sum(conservedNodes(:) ==1);
     end
 
 end

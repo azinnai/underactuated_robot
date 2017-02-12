@@ -1,4 +1,4 @@
-function newNode = checkConstraints(state, action, deltaT, tauLimit, jointLimit, active_joints)
+function newNode = checkConstraints(state, desiredTaskAcceleration, deltaT, tauLimit, jointLimit, active_joints)
 
 constraintViolated = false;
 
@@ -41,7 +41,7 @@ qD = state(n_joints+1 : n_joints*2)';
     
     JbarPinvCurrent = pinv(JbarCurrent);
     
-    q2DDCurrent = JbarPinvCurrent * (action - Jdot*qD + J1*inv(B11)*(C1 + h1));
+    q2DDCurrent = JbarPinvCurrent * (desiredTaskAcceleration - Jdot*qD + J1*inv(B11)*(C1 + h1));
     
     q1DDCurrent = -inv(B11)*(B12*q2DDCurrent + C1 + h1);
     
