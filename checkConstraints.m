@@ -57,13 +57,21 @@ qD = state(n_joints+1 : n_joints*2)';
     end
 
     
+    
+
+    
     if (constraintViolated == false)
+         
         
         nodeQD = qD + [q1DDCurrent; q2DDCurrent]*deltaT;
     
         nodeQ = mod(q + qD*deltaT + (1/2)*[q1DDCurrent; q2DDCurrent]*deltaT^2, 2*pi);
     
-        %%%CHECK NODE SATURATION
+        for i=2:size(nodeQ,1)
+            if ((nodeQ(i) < pi + jointLimit) && (nodeQ(i) > pi -jointLimit))
+                constraintViolated = true;
+            end
+        end
     
         if (constraintViolated == false)
             newNode = [INVorder(nodeQ,active_joints)', INVorder(nodeQD,active_joints)'];
