@@ -1,12 +1,14 @@
-function  simplePlanning(qStart, taskGoal, motionPrimitiveArray, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaT)
+function  graph = simplePlanning(qStart, taskGoal, motionPrimitiveArray, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaT)
 
 
 
 % Initialization
 
 graph.verts = [];                             % list of vertices: graph.verts(i,:) is the i-th stored configuration  
- 
-graph.adjMat = sparse(200,200,0); % adjacency matrix of an oriented graph
+
+sizeTree = depthTree * maxBranching;
+
+graph.adjMat = sparse(sizeTree,sizeTree,0); % adjacency matrix of an oriented graph
 % graph.adjMat(i,j) = 0 -> no edge exists between between graph.verts(i,:) and graph.verts(j,:)
 %                   = d -> 
 %                     if (d == 1)
@@ -17,7 +19,7 @@ graph.adjMat = sparse(200,200,0); % adjacency matrix of an oriented graph
 % Hence, if we are building a tree, the parent vertex of graph.verts(i) is the unique j-th vertex such that graph.adjMat(i,j) < 0,
 % all the other vertices such that graph.adjMat(i,j) > 0 are children of the i-th vertex. 
 
-graph.adjMat4Edges = sparse(200,200,0); % adjacency matrix for edges identification
+graph.adjMat4Edges = sparse(sizeTree,sizeTree,0); % adjacency matrix for edges identification
 graph.vectorEdges = {};                             % list of edges; each edge represents a path in the form of a sequence of configurations [q1; q2; ...; qm]
 % graph.adjMat4Edges(i,j) = 0 -> no edge exists between between graph.verts(i,:) and graph.verts(j,:)
 %                         = e -> 
@@ -29,13 +31,17 @@ graph.vectorEdges = {};                             % list of edges; each edge r
 nPrimitives = size(motionPrimitiveArray,1); % number of motion primitives
 
 graph.verts(1,:) = qStart; % insert first vertex
+graph.vectorEdges{1} = 1;
 
+graph.solutionNodes = [];
 
 % Main loop 
 addedNodes = 0;
 search = true;
 for s = 1:depthTree
+
     if (search)
+        s
         first = size(graph.verts,1) - addedNodes;
         last = size(graph.verts,1);
         storage = [];
@@ -64,48 +70,53 @@ for s = 1:depthTree
             dist = norm([angleDiff;lengthDiff;speedDiff]);
             
             if (dist <= threshold)
-                disp('WIN!!!!!');%IMPLEMENTARE FUNZIONE DISTANZA
+                disp(strcat('WIN!!! at depth ', mat2str(s)));
+                disp(mat2str(storage(i,:)));
+                disp(mat2str(taskFunc(storage(i,1),storage(i,2), storage(i,3), storage(i,4), storage(i,5))));
+                
                 search = false;
+                
+                index = size(graph.verts,1) + 1;
+                
+                graph.verts(index,:) = storage(i,:);
+                graph.adjMat(parents(i),index) = 1;
+                graph.adjMat(index,parents(i)) = -1;
+                
+                graph.vectorEdges{index} = [graph.vectorEdges{parents(i)}, index];
+                
             end
         end
 
         if (size(storage,1) == 0)
-            disp('Failure!!!');
+            disp(strcat('Failure!!! at depth ', mat2str(s)));
             search = false;
         end
     
+        if (search == true) %If I have found a goal, the probabilistic pruning could cut it . So I disable it.
+            if (size(storage,1) >maxBranching) 
+                 conservedNodes = pruningFunction(storage, taskGoal, maxBranching);
+            else
+                 conservedNodes = ones(size(storage,1),1);
+            end
 
-        if (size(storage,1) >maxBranching)
-             conservedNodes = pruningFunction(storage, taskGoal, maxBranching)
-        else
-            conservedNodes = ones(size(storage,1),1)
-        end
+            for i=1:size(storage,1)
+                if (conservedNodes(i))
+                    index = size(graph.verts,1) + 1;
 
-        for i=1:size(storage,1)
-            if (conservedNodes(i))
-                graph.verts(end+1,:) = storage(i,:);
-                graph.adjMat(parents(i),size(graph.verts,1)) = 1;
-                graph.adjMat(size(graph.verts,1),parents(i)) = -1;
+                    graph.verts(index,:) = storage(i,:);
+                    graph.adjMat(parents(i),index) = 1;
+                    graph.adjMat(index,parents(i)) = -1;
+
+                    graph.vectorEdges{index} = [graph.vectorEdges{parents(i)}, index];
+                end
             end
         end
 
-    addedNodes = sum(conservedNodes(:) ==1);
+        addedNodes = sum(conservedNodes(:) ==1);
     end
 
 end
     
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 end
