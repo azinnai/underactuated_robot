@@ -1,31 +1,38 @@
 function conservedNodes = pruningFunction(newNodes, taskGoal, alfa, maxBranching)
 
 
+goalNode = [pi/2; 0 ; 0 ; 0 ; 0;0;0;0;0;0];
+goalJoints = goalNode(1:5);
+potentialWeight = 0.6;
 
-goalJoints = [pi/2; 0 ; 0 ; 0 ; 0];
+weightsJoints = eye(size(goalJoints,1));  %diag([5;4;3;2;1]);
 
-weightsJoints = diag([5;4;3;2;1]);
 
-goalPotentialEnergy = taskGoal(2,1)*sin(taskGoal(1,1));
-goalKineticEnergy = 0;
+[goalPotentialEnergy, goalKineticEnergy] = computeEnergies(goalNode);
 
-goalEnergy = goalPotentialEnergy + goalKineticEnergy;
+%goalPotentialEnergy = taskGoal(2,1)*sin(taskGoal(1,1));
+%goalKineticEnergy = 0;
+
+
+
+goalEnergy = potentialWeight * goalPotentialEnergy + (1-potentialWeight) * goalKineticEnergy;
 
 H = zeros(size(newNodes,1),1);
 conservedNodes = zeros(size(newNodes,1),1);
 
 for i = 1: size(newNodes,1)
-    taskValue = taskFunc(newNodes(i,1),newNodes(i,2),newNodes(i,3),newNodes(i,4),newNodes(i,5));
-    J = JFunc(newNodes(i,1),newNodes(i,2),newNodes(i,3),newNodes(i,4),newNodes(i,5));
-    taskDotValue = J * newNodes(i,6:10)';
+    %taskValue = taskFunc(newNodes(i,1),newNodes(i,2),newNodes(i,3),newNodes(i,4),newNodes(i,5));
+    %J = JFunc(newNodes(i,1),newNodes(i,2),newNodes(i,3),newNodes(i,4),newNodes(i,5));
+    %taskDotValue = J * newNodes(i,6:10)'; 
+    %nodePotentialEnergy = taskValue(2)*sin(taskValue(1));
+    %nodeKineticEnergy = 0.5 * (taskDotValue'*taskDotValue);
     
-
-    nodePotentialEnergy = taskValue(2)*sin(taskValue(1));
-    nodeKineticEnergy = 0.5 * (taskDotValue'*taskDotValue);
+    [nodePotentialEnergy, nodeKineticEnergy] = computeEnergies(newNodes(i,:));
     
-    nodeEnergy = nodePotentialEnergy + nodeKineticEnergy;
     
-    H(i) = abs(goalEnergy - nodeEnergy);
+    nodeEnergy = potentialWeight*nodePotentialEnergy +(1 - potentialWeight)* nodeKineticEnergy;
+    
+    H(i) = 2*abs(goalEnergy - nodeEnergy);
     
     differenceFromStraightPose = boxMinus(newNodes(i,1:5)', goalJoints);
     

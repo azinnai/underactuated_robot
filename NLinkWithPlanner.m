@@ -16,15 +16,15 @@ n_joints_active = n_joints - n_joints_unactive;
 
 
 %Planning parameters
-depthTree = 30;
-maxBranching = 3000;
+depthTree = 1;
+maxBranching = 1000;
 threshold = 0.05;
 deltaTPlanning = 0.15;
 
 %Controller parameters
 Kd = 1;
 Kp = 1;
-deltaT = 0.001;
+deltaT = 0.002;
 totalSeconds = 0;
 totalIterations = totalSeconds/deltaT;
 
@@ -40,18 +40,25 @@ goal = [pi/2 0;
         l*5/2 0];
     
 
+cd(tempdir)
+file = fullfile(cd, 'JFunc.m');
+if exist(file,'file')
+    disp('matlabFunctions found... Loading from files...');
+else
+    disp('matlabFunctions not found... Creting files...')
+    createMatlabFunctions(m,l,I,lc,active_joints);
+end
 
-%createMatlabFunctions(m,l,I,lc,active_joints);
-primitivesScaling = 1.5;
+primitivesScaling = 2;
 primitives = [0.1, 0; -0.1, 0; 0, 0.1; 0, -0.1; 0.1, 0.1; 0.1, -0.1; -0.1, 0.1; -0.1,-0.1; 0 , 0];
 primitives = primitives(: ,:);
 primitives = primitives*primitivesScaling;
 
-graph = simplePlanning([q', qD'],goal, primitives, tauLimit, jointLimitQ, active_joints,depthTree, maxBranching, threshold, deltaTPlanning);
+graph = simplePlanning([q', qD'],goal, primitives, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT);
 
 
 if (size(graph.solutionNodes,2) == 0)
-    graph.solutionNodes = size(graph.vectorEdges,2) -100 ;
+    graph.solutionNodes = size(graph.vectorEdges,2) -200 ;
 end
 
 

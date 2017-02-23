@@ -1,4 +1,4 @@
-function  graph = simplePlanning(qStart, taskGoal, motionPrimitiveArray, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaT)
+function  graph = simplePlanning(qStart, taskGoal, motionPrimitiveArray, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT)
 
 
 
@@ -22,9 +22,10 @@ graph.vectorEdges{1} = 1;
 graph.solutionNodes = [];
 
 % Main loop 
+search = true;
 addedNodes = 0;
 numNodesFound = 0;
-search = true;
+bestSolution = threshold;
 for depth = 1:depthTree
 
     if (search)
@@ -42,7 +43,7 @@ for depth = 1:depthTree
         numFoundNodes = 0;
         for i=first:last
             for j=1:nPrimitives
-               newNode = checkConstraints(graph.verts(i,:),motionPrimitiveArray(j,:)', deltaT, tauLimit, jointLimitQ, active_joints);
+               newNode = checkConstraints(graph.verts(i,:),motionPrimitiveArray(j,:)', deltaTPlanning, deltaT, tauLimit, jointLimitQ, active_joints);
 
                if (newNode ~= 9999)
                    
@@ -87,9 +88,11 @@ for depth = 1:depthTree
                 %graph.adjMat(parents(i),newVerticeIndex) = 1;
                 %graph.adjMat(newVerticeIndex,parents(i)) = -1;
                 
-                graph.solutionNodes(end +1) = newVertexIndex;
-                
                 graph.vectorEdges{newVertexIndex} = [graph.vectorEdges{parents(i)}, newVertexIndex];
+                
+                if (distanceFromGoal <= bestSolution)
+                    graph.solutionNode = newVertexIndex;
+                end
                 
             end
         end
