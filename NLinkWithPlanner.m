@@ -1,6 +1,7 @@
 clear all
 clc
 
+
 %robot parameters for 5r robots with all equal links
 m = 0.2;
 l = 0.2;
@@ -15,7 +16,7 @@ n_joints_active = n_joints - n_joints_unactive;
 
 
 %Planning parameters
-depthTree = 200;
+depthTree = 30;
 maxBranching = 3000;
 threshold = 0.05;
 deltaTPlanning = 0.15;
@@ -29,10 +30,10 @@ totalIterations = totalSeconds/deltaT;
 
 %Constraints on torques and joint positions
 tauLimit = 2;
-jointLimitQ = 0;
+jointLimitQ = pi/12;
 
 %Initial state and task goal state
-q = [-pi/2; 0; 0; 0; 0];
+q = [-pi/2; 0.1; 0.1; 0.1; 0.1];
 qD = [0; 0; 0; 0; 0];
 
 goal = [pi/2 0;
@@ -41,17 +42,21 @@ goal = [pi/2 0;
 
 
 %createMatlabFunctions(m,l,I,lc,active_joints);
-
-primitives = [0.2, 0; -0.2, 0; 0, 0.2; 0, -0.2; 0.2, 0.2; 0.2, -0.2; -0.2, 0.2; -0.2,-0.2; 0 , 0];
-
+primitivesScaling = 1.5;
+primitives = [0.1, 0; -0.1, 0; 0, 0.1; 0, -0.1; 0.1, 0.1; 0.1, -0.1; -0.1, 0.1; -0.1,-0.1; 0 , 0];
+primitives = primitives(: ,:);
+primitives = primitives*primitivesScaling;
 
 graph = simplePlanning([q', qD'],goal, primitives, tauLimit, jointLimitQ, active_joints,depthTree, maxBranching, threshold, deltaTPlanning);
 
 
+if (size(graph.solutionNodes,2) == 0)
+    graph.solutionNodes = size(graph.vectorEdges,2) -100 ;
+end
 
 
 
-for sol=1:size(graph.solutionNodes,1)
+for sol=1:size(graph.solutionNodes,2)
 
     solutionIndices = graph.vectorEdges{graph.solutionNodes(sol)};
 

@@ -6,7 +6,7 @@ function  graph = simplePlanning(qStart, taskGoal, motionPrimitiveArray, tauLimi
 
 graph.verts = [];                             % list of vertices: graph.verts(i,:) is the i-th stored configuration  
 
-sizeTree = depthTree * maxBranching;
+%sizeTree = depthTree * maxBranching;
 
 %graph.adjMat = sparse(sizeTree,sizeTree,0); % adjacency matrix of an oriented graph
 
@@ -23,22 +23,29 @@ graph.solutionNodes = [];
 
 % Main loop 
 addedNodes = 0;
+numNodesFound = 0;
 search = true;
 for depth = 1:depthTree
-tic
+
     if (search)
-        depth
+        if (mod(depth,1) == 0)
+            disp(strcat('Found nodes: ', mat2str(numNodesFound)));
+            disp(strcat('Depth: ', mat2str(depth)));
+        end
         first = size(graph.verts,1) - addedNodes;
+        if (depth > 1)
+            first = first +1;
+        end
         last = size(graph.verts,1);
         storage = zeros(maxBranching*nPrimitives,10);
         parents = zeros(maxBranching*nPrimitives,1);
         numFoundNodes = 0;
         for i=first:last
             for j=1:nPrimitives
-            
                newNode = checkConstraints(graph.verts(i,:),motionPrimitiveArray(j,:)', deltaT, tauLimit, jointLimitQ, active_joints);
 
                if (newNode ~= 9999)
+                   
                    numFoundNodes = numFoundNodes + 1;
                    storage(numFoundNodes,:) = newNode;
                    parents(numFoundNodes) = i;
@@ -74,15 +81,15 @@ tic
                 
                 search = false;
                 
-                newVerticeIndex = size(graph.verts,1) + 1;
+                newVertexIndex = size(graph.verts,1) + 1;
                 
-                graph.verts(newVerticeIndex,:) = storage(i,:);
+                graph.verts(newVertexIndex,:) = storage(i,:);
                 %graph.adjMat(parents(i),newVerticeIndex) = 1;
                 %graph.adjMat(newVerticeIndex,parents(i)) = -1;
                 
-                graph.solutionNodes(end +1) = newVerticeIndex;
+                graph.solutionNodes(end +1) = newVertexIndex;
                 
-                graph.vectorEdges{newVerticeIndex} = [graph.vectorEdges{parents(i)}, newVerticeIndex];
+                graph.vectorEdges{newVertexIndex} = [graph.vectorEdges{parents(i)}, newVertexIndex];
                 
             end
         end
@@ -93,30 +100,35 @@ tic
         end
     
         if (search == true) %If I have found a goal, the probabilistic pruning could cut it . So I disable it.
-            if (numFoundNodes >maxBranching) 
-                 conservedNodes = pruningFunction(storage, taskGoal, maxBranching);
+            if (numFoundNodes >maxBranching)
+                %increment = floor(depth/10);
+                %alfa = 0.6 + 0.075 * increment;
+                alfa = 0.65;
+                conservedNodes = pruningFunction(storage, taskGoal,alfa, maxBranching);
+           
             else
-                 conservedNodes = ones(numFoundNodes,1);
+                conservedNodes = ones(numFoundNodes,1);
             end
 
             for i=1:numFoundNodes
                 if (conservedNodes(i))
-                    newVerticeIndex = size(graph.verts,1) + 1;
+                    newVertexIndex = size(graph.verts,1) + 1;
 
-                    graph.verts(newVerticeIndex,:) = storage(i,:);
+                    graph.verts(newVertexIndex,:) = storage(i,:);
                     %graph.adjMat(parents(i),newVerticeIndex) = 1;
                     %graph.adjMat(newVerticeIndex,parents(i)) = -1;
 
-                    graph.vectorEdges{newVerticeIndex} = [graph.vectorEdges{parents(i)}, newVerticeIndex];
+                    graph.vectorEdges{newVertexIndex} = [graph.vectorEdges{parents(i)}, newVertexIndex];
                 end
             end
         end
 
         addedNodes = sum(conservedNodes(:) ==1);
+        numNodesFound = size(conservedNodes,1);
     end
 
 end
- toc   
+  
 
 
 end
