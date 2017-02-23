@@ -45,7 +45,7 @@ file = fullfile(cd, 'JFunc.m');
 if exist(file,'file')
     disp('matlabFunctions found... Loading from files...');
 else
-    disp('matlabFunctions not found... Creting files...')
+    disp('matlabFunctions not found... Creating files...')
     createMatlabFunctions(m,l,I,lc,active_joints);
 end
 

@@ -3,7 +3,6 @@ function createMatlabFunctions(m,l,I,lc,active_joints)
 
 syms q1 q2 q3 q4 q5 q1D q2D q3D q4D q5D real
 n_joints = size(active_joints,1);
-n_joints_unactive = sum(active_joints(:) ==0);
 omega = [q1D; q1D+q2D; q1D+q2D+q3D; q1D+q2D+q3D+q4D; q1D+q2D+q3D+q4D+q5D];
 g = [0;9.81];
 %Compact definitions
@@ -50,7 +49,6 @@ CSymbols = Cmatrix(BSymbols);
 hSymbols = jacobian(U,[q1;q2;q3;q4;q5])';
 
 qSymbols_ordered = reorderingMatrix([q1;q2;q3;q4;q5],active_joints);
-%activeJointsSymbols = qSymbols_ordered(n_joints_unactive + 1 : n_joints);
 qDSymbols_ordered = reorderingMatrix([q1D;q2D;q3D;q4D;q5D],active_joints);
 
 BSymbols = reorderingMatrix(BSymbols, active_joints);
@@ -73,15 +71,6 @@ Jdq5 = jacobian(JSymbols(:,5),qSymbols_ordered);
 
 JdotSymbols = [Jdq1*qDSymbols_ordered,Jdq2*qDSymbols_ordered,Jdq3*qDSymbols_ordered,Jdq4*qDSymbols_ordered,Jdq5*qDSymbols_ordered];
 
-%J1 = JSymbols(:,1:n_joints_unactive);
-%J2 = JSymbols(:,n_joints_unactive+1:n_joints);
-%B11 = BSymbols(1:n_joints_unactive,1:n_joints_unactive);
-%B12 = BSymbols(1:n_joints_unactive,n_joints_unactive+1:n_joints);
-%JbarSample = J2 - J1*(inv(B11)*B12); 
-%%JbarSyms = sym ('Jb',size(JbarSample));
-%HSymbols = sqrt(det(JbarSample*JbarSample'));
-%gradHSymbols = gradient(HSymbols, activeJointsSymbols);
-%gradHSymbols = simplify(gradHSymbols);
 
 
 matlabFunction(Jc1Symbols,'File', 'Jc1Func.m');%@q1
@@ -99,6 +88,8 @@ matlabFunction(hSymbols,'File', 'hFunc.m');% @(q1,q2,q3,q4,q5)
 matlabFunction(JSymbols,'File', 'JFunc.m');% @(q1,q2,q3,q4,q5)
 matlabFunction(JdotSymbols,'File', 'JdotFunc.m');%@(q1,q2,q3,q4,q5,q1D,q2D,q3D,q4D,q5D)
 
+matlabFunction(JbarSymbols, 'File', 'JbarFunc.m');
+%matlabFunction(JbarPinvSymbols, 'File', 'JbarPinvFunc.m');
 %matlabFunction(gradHSymbols, 'File', 'gradHFunc.m');
 
 

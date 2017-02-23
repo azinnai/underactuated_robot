@@ -23,19 +23,20 @@ Kd = 1;
 Kp = 1;
 Knull = 1;
 deltaT = 0.001;
-totalSeconds = 0.5;
+totalSeconds = 15;
 totalIterations = totalSeconds/deltaT;
 saturationQD = 5;
 tauLimit = 2;
 jointLimitQ = pi;
+epsilon = 0.000000008;
 
 
 
-file = fullfile('JFunc.m');
+file = fullfile('JbarFunc.m');
 if exist(file,'file')
     disp('matlabFunctions found... Loading from files...');
 else
-    disp('matlabFunctions not found... Creting files...')
+    disp('matlabFunctions not found... Creating files...')
     createMatlabFunctions(m,l,I,lc,active_joints);
 end
 
@@ -54,7 +55,8 @@ for t=1:totalIterations
     tauViolated = false;
     %Save the state before reordering it
     stateStorage(t,:) = [q',qD'];
-
+    
+    qOriginal = q;
     
     B = BFunc(q(2),q(3),q(4),q(5));
     C = CFunc(q(2),q(3),q(4),q(5),qD(1),qD(2),qD(3),qD(4),qD(5));
@@ -76,6 +78,10 @@ for t=1:totalIterations
     task = taskFunc(q(1),q(2),q(3),q(4),q(5));
 
     J = JFunc(q(1),q(2),q(3),q(4),q(5));
+    
+       q_pluse = q + ones(size(q))*epsilon;
+       q_minuse = q - ones(size(q))*epsilon;
+
     
     taskDot = J * qD;
 
@@ -103,31 +109,46 @@ for t=1:totalIterations
     errorStorage(t,:) = errorVec';
             
     vA = goal(:,3) + Kd*(goal(:,2) - taskDot) + Kp*errorVec;
-    nullSpaceAcceleration = zeros(n_joints_active,1);
+  
  
-    %JbarCurrent = J2 -J1*(B11\B12);
-    JbarCurrent = J2 - J1*(inv(B11)*B12);
-    
+    JbarCurrent = J2 - J1*(inv(B11)*B12);    
     try
     	JbarPinvCurrent = pinv(JbarCurrent);
     catch
     	JbarPinvCurrent = zeros(size(JbarCurrent'));
     end
     
+    qPlus = zeros(size(q));
+    qMinus = zeros(size(q));
+    nullSpaceAcceleration = zeros(n_joints_active,1);
+    for p=1:n_joints_active
+    
+        qPlus = qOriginal;
+        qPlus(p + n_joints_unactive) = qPlus(p + n_joints_unactive) + epsilon;
+        qMinus = qOriginal;
+        qMinus(p + n_joints_unactive) = qMinus(p + n_joints_unactive) - epsilon;
+
+        JbarPlus = JbarFunc(qPlus(1),qPlus(2),qPlus(3),qPlus(4),qPlus(5));
+        JbarMinus = JbarFunc(qMinus(1),qMinus(2),qMinus(3),qMinus(4),qMinus(5));
+
+
+        HPlus = sqrt(det(JbarPlus*JbarPlus'));
+        HMinus = sqrt(det(JbarMinus*JbarMinus'));
+
+        gradHp = (HPlus - HMinus)/(2*epsilon);
+
+        nullSpaceAcceleration(p) = gradHp;
+    
+    end
+    
     projectedGradient = Knull*(eye(n_joints_active) - JbarPinvCurrent*JbarCurrent)*nullSpaceAcceleration;
 
- 
-    %q2DDCurrent = JbarPinv * (v - Jdot*qD + J1*(B11\(C1 + h1)));
     q2DDCurrent = JbarPinvCurrent * (vA - Jdot*qD + J1*inv(B11)*(C1 + h1)) + projectedGradient;
     
-    %q1DDCurrent = -B11\(B12*q2DD_ordered + C1 + h1);
     q1DDCurrent = -inv(B11)*(B12*q2DDCurrent + C1 + h1);
     
     tauCurrent = B21*q1DDCurrent + B22*q2DDCurrent + C2 + h2;
-    
-    %show2 = (B22 - B21*(B11\B12))\(tauCurrent + B21*(B11\(C1 + h1)) - C2 - h2);
-    %show2 = inv( - B21*inv(B11)*B12 + B22)*(tauCurrent + B21*inv(B11)*(C1 + h1) - C2-h2)
-    
+
     for i=1:size(tauCurrent,1)
         if (tauCurrent(i) > tauLimit)
             tauCurrent(i) = tauLimit;
@@ -141,8 +162,7 @@ for t=1:totalIterations
     tauStorage(t,:) = tauCurrent';
     
     if (tauViolated==true)
-       disp('tauViolated');
-       %q2DDCurrent = (B22 - B21*(B11\B12))\(tauCurrent + B21*(B11\(C1 + h1)) - C2 - h2);
+       %disp('tauViolated');
        q2DDCurrent = inv( - B21*inv(B11)*B12 + B22)*(tauCurrent + B21*inv(B11)*(C1 + h1) - C2-h2);
        q1DDCurrent = -inv(B11)*(B12*q2DDCurrent + C1 + h1);
 
@@ -228,7 +248,7 @@ end
 x0 = [0,0]; %Origin of the base link
 
 
-for i=1:10: size(stateStorage,1)
+for i=1:20: size(stateStorage,1)
     x1 = [l*cos(stateStorage(i,1)), l*sin(stateStorage(i,1))];
     x2 = x1 + [l*cos(stateStorage(i,1) + stateStorage(i,2)),l*sin(stateStorage(i,1) + stateStorage(i,2))];
     x3 = x2 + [l*cos(stateStorage(i,1) + stateStorage(i,2) + stateStorage(i,3)),l*sin(stateStorage(i,1) + stateStorage(i,2)+ stateStorage(i,3))];
