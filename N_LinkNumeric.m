@@ -19,9 +19,9 @@ qD = [0; 0; 0; 0; 0];
 goal = [pi/2 0 0;
         l*5/2 0 0];
     
-Kd = 1;
-Kp = 1;
-Knull = 1;
+Kd = 5;
+Kp = 5;
+Knull = 5;
 deltaT = 0.001;
 totalSeconds = 15;
 totalIterations = totalSeconds/deltaT;
@@ -78,10 +78,7 @@ for t=1:totalIterations
     task = taskFunc(q(1),q(2),q(3),q(4),q(5));
 
     J = JFunc(q(1),q(2),q(3),q(4),q(5));
-    
-       q_pluse = q + ones(size(q))*epsilon;
-       q_minuse = q - ones(size(q))*epsilon;
-
+   
     
     taskDot = J * qD;
 
@@ -123,11 +120,14 @@ for t=1:totalIterations
     nullSpaceAcceleration = zeros(n_joints_active,1);
     for p=1:n_joints_active
     
-        qPlus = qOriginal;
+        qPlus = q;
         qPlus(p + n_joints_unactive) = qPlus(p + n_joints_unactive) + epsilon;
-        qMinus = qOriginal;
+        qMinus = q;
         qMinus(p + n_joints_unactive) = qMinus(p + n_joints_unactive) - epsilon;
-
+        
+        qPlus = INVorder(qPlus, active_joints);
+        qMinus = INVorder(qMinus, active_joints);
+        
         JbarPlus = JbarFunc(qPlus(1),qPlus(2),qPlus(3),qPlus(4),qPlus(5));
         JbarMinus = JbarFunc(qMinus(1),qMinus(2),qMinus(3),qMinus(4),qMinus(5));
 
