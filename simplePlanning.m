@@ -1,4 +1,4 @@
-function  graph = simplePlanning(qStart, taskGoal, motionPrimitiveArray, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT)
+function  graph = simplePlanning(qStart, taskGoal, motionPrimitiveArray, Knull, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT)
 
 
 
@@ -18,8 +18,6 @@ nPrimitives = size(motionPrimitiveArray,1); % number of motion primitives
 
 graph.verts(1,:) = qStart; % insert first vertex
 graph.vectorEdges{1} = 1;
-
-graph.solutionNodes = [];
 
 % Main loop 
 search = true;
@@ -43,7 +41,7 @@ for depth = 1:depthTree
         numFoundNodes = 0;
         for i=first:last
             for j=1:nPrimitives
-               newNode = checkConstraints(graph.verts(i,:),motionPrimitiveArray(j,:)', deltaTPlanning, deltaT, tauLimit, jointLimitQ, active_joints);
+               newNode = checkConstraints(graph.verts(i,:),motionPrimitiveArray(j,:)', Knull, deltaTPlanning, deltaT, tauLimit, jointLimitQ, active_joints);
 
                if (newNode ~= 9999)
                    
@@ -63,7 +61,7 @@ for depth = 1:depthTree
         for i=1:numFoundNodes
             
             taskValue = taskFunc(storage(i,1),storage(i,2),storage(i,3),storage(i,4),storage(i,5));
-            angleDiff = boxMinus(taskValue(1), taskGoal(1,1));
+            anglesDiff = boxMinus(taskValue(1), taskGoal(1,1));
             lengthDiff = taskValue(2) - taskGoal(2,1);
             
             if (size(taskGoal,1) == 2) %if I have specified velocity goal conditions 
@@ -73,7 +71,7 @@ for depth = 1:depthTree
             else speedDiff = 0;
             end
             
-            distanceFromGoal = norm([angleDiff;lengthDiff;speedDiff]);
+            distanceFromGoal = norm([anglesDiff;lengthDiff;speedDiff]);
             
             if (distanceFromGoal <= threshold)
                 disp(strcat('WIN!!! at depth ', mat2str(depth)));
@@ -92,6 +90,7 @@ for depth = 1:depthTree
                 
                 if (distanceFromGoal <= bestSolution)
                     graph.solutionNode = newVertexIndex;
+                    bestSolution = distanceFromGoal;
                 end
                 
             end

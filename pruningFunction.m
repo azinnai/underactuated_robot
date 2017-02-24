@@ -1,7 +1,7 @@
 function conservedNodes = pruningFunction(newNodes, taskGoal, alfa, maxBranching)
 
 
-goalNode = [pi/2; 0 ; 0 ; 0 ; 0;0;0;0;0;0];
+goalNode = [pi/2; 0; 0; 0; 0; 0; 0; 0; 0; 0];
 goalJoints = goalNode(1:5);
 potentialWeight = 0.6;
 
@@ -30,13 +30,13 @@ for i = 1: size(newNodes,1)
     [nodePotentialEnergy, nodeKineticEnergy] = computeEnergies(newNodes(i,:));
     
     
-    nodeEnergy = potentialWeight*nodePotentialEnergy +(1 - potentialWeight)* nodeKineticEnergy;
+    nodeEnergy = potentialWeight*nodePotentialEnergy + (1 - potentialWeight)* nodeKineticEnergy;
     
     H(i) = 2*abs(goalEnergy - nodeEnergy);
     
     differenceFromStraightPose = boxMinus(newNodes(i,1:5)', goalJoints);
     
-    H(i) = H(i) + (1/det(weightsJoints))*norm(differenceFromStraightPose' * weightsJoints * differenceFromStraightPose );
+    H(i) = H(i) + (1/det(weightsJoints))*norm(differenceFromStraightPose' * weightsJoints * differenceFromStraightPose);
 
     
     
@@ -49,27 +49,12 @@ H = HBest./H;
 H = (alfa*H/2) + (1- alfa)*rand(size(H));
 
 
-
-%for i = 1 : size(H,1)
-%    for j = 1 : size(H,1)-1
-%        if H(j)<H(j+1)
-%            H_temp = H(j+1);
-%            index_temp = index(j+1);
-%            H(j+1) = H(j);
-%            H(j) = H_temp;
-%            index(j+1) = index(j);
-%            index(j) = index_temp;
-%        end
-%    end
-%end
-
-
 Htemp = sort(H,'descend');
 Hcut = Htemp(maxBranching + 1);
 
 
 for i = 1: size(H,1)
-    if H(i)> Hcut
+    if (H(i)> Hcut)
         conservedNodes(i) = 1;
     else
         conservedNodes(i) = 0;

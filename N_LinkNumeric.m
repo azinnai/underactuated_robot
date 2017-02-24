@@ -13,7 +13,7 @@ active_joints = [0;1;1;1;1];
 n_joints_unactive = sum(active_joints(:) ==0);
 n_joints_active = n_joints - n_joints_unactive;
 %%%%%%%%%%%%%%%%INITIAL STATE AND GOAL
-q = [-pi/2; 0; 0; 0; 0];
+q = [-pi/2; 0.1; 0.1; 0.1; 0.1];
 qD = [0; 0; 0; 0; 0];
 
 goal = [pi/2 0 0;
@@ -28,12 +28,12 @@ totalIterations = totalSeconds/deltaT;
 saturationQD = 5;
 tauLimit = 2;
 jointLimitQ = pi;
-epsilon = 0.000000008;
+epsilon = 0.000000008; %Used for numerical differentiation
 
 
 
 file = fullfile('JbarFunc.m');
-if exist(file,'file')
+if exist('JbarFunc.m','file')
     disp('matlabFunctions found... Loading from files...');
 else
     disp('matlabFunctions not found... Creating files...')
@@ -115,8 +115,7 @@ for t=1:totalIterations
     	JbarPinvCurrent = zeros(size(JbarCurrent'));
     end
     
-    qPlus = zeros(size(q));
-    qMinus = zeros(size(q));
+
     nullSpaceAcceleration = zeros(n_joints_active,1);
     for p=1:n_joints_active
     
@@ -141,7 +140,7 @@ for t=1:totalIterations
     
     end
     
-    projectedGradient = Knull*(eye(n_joints_active) - JbarPinvCurrent*JbarCurrent)*nullSpaceAcceleration;
+    projectedGradient = Knull*(eye(n_joints_active) - JbarPinvCurrent*JbarCurrent)*nullSpaceAcceleration
 
     q2DDCurrent = JbarPinvCurrent * (vA - Jdot*qD + J1*inv(B11)*(C1 + h1)) + projectedGradient;
     
