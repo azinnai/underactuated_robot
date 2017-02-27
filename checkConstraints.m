@@ -7,6 +7,8 @@ function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, delta
 
     q = state(1:n_joints)';
     qD = state(n_joints+1 : n_joints*2)';
+    
+    epsilon = 0.000000008;
 
 
     for i = 0 : deltaT : deltaTPlanning
@@ -101,8 +103,8 @@ function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, delta
 
             q = mod(q + qD*deltaT + (1/2)*[q1DDCurrent; q2DDCurrent]*deltaT^2, 2*pi);
 
-            for j=2:size(q,1)
-                if ((q(j) < pi + jointLimit) && (q(j) > pi -jointLimit))
+            for j=1:size(q,1)
+                if ((q(j) < pi + jointLimit) && (q(j) > pi -jointLimit) && (active_joints(j) == 1))
                     constraintViolated = true;
                 end
             end

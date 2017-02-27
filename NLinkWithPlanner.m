@@ -1,3 +1,4 @@
+close all
 clear all
 clc
 
@@ -8,18 +9,18 @@ l = 0.2;
 I = 0.05;
 lc = 0.1; 
 
-active_joints = [0;1;1;1;1];
+active_joints = [1;1;1;1;0];
 
 
 %Planning parameters
-depthTree = 50;
+depthTree = 10;
 maxBranching = 3000;
-threshold = 0.05;
+threshold = 0.1;
 deltaTPlanning = 0.15;
 deltaT = 0.005;
-
-primitivesScaling = 2;
-Knull = 0; %This is used for projected gradient. Should not be a constant. When 0 projected gradient is disabled.
+for r = 0
+primitivesScaling = 1;
+Knull = r; %This is used for projected gradient. Should not be a constant. When 0 projected gradient is disabled.
 
 
 %Constraints on torques and joint positions
@@ -45,6 +46,7 @@ end
 primitives = [0.1, 0; -0.1, 0; 0, 0.1; 0, -0.1; 0.1, 0.1; 0.1, -0.1; -0.1, 0.1; -0.1,-0.1; 0 , 0];
 primitives = primitives(: ,:);
 primitives = primitives*primitivesScaling;
+found = false;
 
 graph = simplePlanning([q', qD'],goal, primitives,Knull, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT);
 
@@ -52,6 +54,9 @@ graph = simplePlanning([q', qD'],goal, primitives,Knull, tauLimit, jointLimitQ, 
 %If I have not found a solution, plot something anyhow.
 if sum(strcmp(fieldnames(graph), 'solutionNode')) == 0
    graph.solutionNode = size(graph.vectorEdges,2) -1 ;
+else
+   fname = strcat('solution_',mat2str(r), '.mat');
+   found = true;
 end
 
 edgesIDList = graph.vectorEdges{graph.solutionNode}';
@@ -65,6 +70,9 @@ errorStorage = zeros(size(edgesIDList,1), 2);
 for i=1:size(edgesIDList,1)
     
     stateStorage(i,:) = graph.verts(edgesIDList(i),:);
+    if (found == true)
+        save(fname, 'stateStorage');
+    end
     taskState = taskFunc(stateStorage(i,1),stateStorage(i,2),stateStorage(i,3),stateStorage(i,4),stateStorage(i,5));
     taskStorage(i,:) = taskState';
    
@@ -88,7 +96,7 @@ plot(timeStorage,errorStorage(:,1)');
 subplot(2,1,2)
 plot(timeStorage,errorStorage(:,2)');
 
-pause %Wait spacebar press to start real-time simulation 
+%pause %Wait spacebar press to start real-time simulation 
 
 figure
 figureLimits = l*5 + l/2;
@@ -110,19 +118,19 @@ if (active_joints(1) == 0)
 end
 link2 = line('LineWidth',2.5,'Color','r');
 if (active_joints(2) == 0)
-    link1.Color = 'b';
+    link2.Color = 'b';
 end
 link3 = line('LineWidth',2.5,'Color','r');
 if (active_joints(3) == 0)
-    link1.Color = 'b';
+    link3.Color = 'b';
 end
 link4 = line('LineWidth',2.5,'Color','r');
 if (active_joints(4) == 0)
-    link1.Color = 'b';
+    link4.Color = 'b';
 end
 link5 = line('LineWidth',2.5,'Color','r');
 if (active_joints(5) == 0)
-    link1.Color = 'b';
+    link5.Color = 'b';
 end
 
 
@@ -142,7 +150,7 @@ for i=1: size(stateStorage,1)
     set(link4,'XData',[x3(1),x4(1)], 'YData',[x3(2),x4(2)])
     set(link5,'XData',[x4(1),x5(1)], 'YData',[x4(2),x5(2)])
 
-    %task_text.String = strcat(mat2str(double(vpa(taskStorage(i,1),3)),3),' COM Angle ',mat2str(double(vpa(taskStorage(i,2),3)),3),' COM Lenght');
+    task_text.String = strcat(mat2str(double(vpa(taskStorage(i,1),3)),3),' COM Angle ',mat2str(double(vpa(taskStorage(i,2),3)),3),' COM Lenght');
     time_text.String = mat2str(i*deltaTPlanning);
 
     drawnow;
@@ -153,5 +161,5 @@ for i=1: size(stateStorage,1)
 end
 
 
-
+end
 
