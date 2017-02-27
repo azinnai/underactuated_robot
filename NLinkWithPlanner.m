@@ -13,13 +13,13 @@ active_joints = [1;1;1;1;0];
 
 
 %Planning parameters
-depthTree = 10;
+depthTree = 20;
 maxBranching = 3000;
 threshold = 0.1;
 deltaTPlanning = 0.15;
-deltaT = 0.005;
+deltaT = 0.01;
 for r = 0
-primitivesScaling = 1;
+primitivesScaling = 2;
 Knull = r; %This is used for projected gradient. Should not be a constant. When 0 projected gradient is disabled.
 
 
@@ -28,13 +28,14 @@ tauLimit = 2;
 jointLimitQ = pi/12;
 
 %Initial state and task goal state
-q = [-pi/2; 0.1; 0.1; 0.1; 0.1];
+q = [-pi/2 + 0.1; 0.1; 0.1; 0.1; 0.1];
 qD = [0; 0; 0; 0; 0];
 
 goal = [pi/2 0;
         l*5/2 0];
 
-    
+createMatlabFunctions(m,l,I,lc,active_joints);
+
 if exist('JbarFunc.m','file')
     disp('matlabFunctions found... Loading from files...');
 else
