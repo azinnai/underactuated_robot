@@ -71,8 +71,6 @@ Jdq5 = jacobian(JSymbols(:,5),qSymbols_ordered);
 
 JdotSymbols = [Jdq1*qDSymbols_ordered,Jdq2*qDSymbols_ordered,Jdq3*qDSymbols_ordered,Jdq4*qDSymbols_ordered,Jdq5*qDSymbols_ordered];
 
-JbarSymbols = [
-
 
 matlabFunction(Jc1Symbols,'File', 'Jc1Func.m');%@q1
 matlabFunction(Jc2Symbols,'File', 'Jc2Func.m');%@q1,q2
