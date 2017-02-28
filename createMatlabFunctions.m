@@ -1,6 +1,9 @@
 function createMatlabFunctions(m,l,I,lc,active_joints)
 
 
+fileID = fopen('activeJoints.txt','w');
+fprintf(fileID, '%4.4f\n', active_joints);
+
 syms q1 q2 q3 q4 q5 q1D q2D q3D q4D q5D real
 n_joints = size(active_joints,1);
 omega = [q1D; q1D+q2D; q1D+q2D+q3D; q1D+q2D+q3D+q4D; q1D+q2D+q3D+q4D+q5D];

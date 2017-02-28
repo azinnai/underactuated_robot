@@ -30,15 +30,22 @@ tauLimit = 2;
 jointLimitQ = pi;
 epsilon = 0.000000008; %Used for numerical differentiation
 
-
-
-file = fullfile('JbarFunc.m');
-if exist('JbarFunc.m','file')
-    disp('matlabFunctions found... Loading from files...');
+fileName = fullfile('activeJoints.txt');
+if exist(fileName,'file')
+    fileID = fopen(fileName,'r');
+    lastConfiguration = fscanf(fileID, '%f');
+    if (lastConfiguration == active_joints)
+        disp('matlabFunctions found... Loading from files...');
+    else
+        disp('matlabFunctions not found... Creating files...')
+        createMatlabFunctions(m,l,I,lc,active_joints);
+    end
+    
 else
     disp('matlabFunctions not found... Creating files...')
     createMatlabFunctions(m,l,I,lc,active_joints);
 end
+
 
 
 stateStorage = zeros(totalIterations,n_joints*2);

@@ -46,6 +46,7 @@ function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, delta
         try
             JbarPinvCurrent = pinv(JbarCurrent);
         catch
+            disp('singular jbar')
             JbarPinvCurrent = zeros(size(JbarCurrent'));
             constraintViolated = true;
         end    
@@ -93,12 +94,12 @@ function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, delta
         for k=1:size(tauCurrent,1)
             if (tauCurrent(k) > tauLimit)
                 constraintViolated = true;
-                disp('tau')
-                tauCurrent(k)
+                %disp('tau')
+                %tauCurrent(k)
             elseif (tauCurrent(k) < - tauLimit)
                 constraintViolated = true;
-                disp('tau')
-                tauCurrent(k)
+                %disp('tau')
+                %tauCurrent(k)
             end
         end
 
@@ -110,8 +111,8 @@ function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, delta
             for j=1:size(q,1)
                 if ((q(j) < pi + jointLimit) && (q(j) > pi -jointLimit) && (active_joints(j) == 1))
                     constraintViolated = true;
-                    disp('joint limit')
-                    q(j)
+                    %disp('joint limit')
+                    %q(j)
                 end
             end
            

@@ -13,18 +13,18 @@ active_joints = [1;1;1;1;0];
 
 
 %Planning parameters
-depthTree = 20;
+depthTree = 10;
 maxBranching = 3000;
-threshold = 0.1;
+threshold = 0.05;
 deltaTPlanning = 0.15;
-deltaT = 0.01;
+deltaT = 0.005;
 for r = 0
-primitivesScaling = 2;
+primitivesScaling = 1;
 Knull = r; %This is used for projected gradient. Should not be a constant. When 0 projected gradient is disabled.
 
 
 %Constraints on torques and joint positions
-tauLimit = 2;
+tauLimit = 7;
 jointLimitQ = pi/12;
 
 %Initial state and task goal state
@@ -34,17 +34,25 @@ qD = [0; 0; 0; 0; 0];
 goal = [pi/2 0;
         l*5/2 0];
 
-createMatlabFunctions(m,l,I,lc,active_joints);
-
-if exist('JbarFunc.m','file')
-    disp('matlabFunctions found... Loading from files...');
+fileName = 'activeJoints.txt';
+if exist(fileName,'file')
+    fileID = fopen(fileName,'r');
+    lastConfiguration = fscanf(fileID, '%f');
+    if (lastConfiguration == active_joints)
+        disp('matlabFunctions for the current configuration found... Loading from files...');
+    else
+        disp('matlabFunctions not found... Creating files...')
+        createMatlabFunctions(m,l,I,lc,active_joints);
+    end
+    
 else
     disp('matlabFunctions not found... Creating files...')
     createMatlabFunctions(m,l,I,lc,active_joints);
 end
 
 
-primitives = [0.1, 0; -0.1, 0; 0, 0.1; 0, -0.1; 0.1, 0.1; 0.1, -0.1; -0.1, 0.1; -0.1,-0.1; 0 , 0];
+
+primitives = [1, 0; -1, 0; 0, 1; 0, -1; 1, 1; 1, -1; -1, 1; -1,-1; 0 , 0];
 primitives = primitives(: ,:);
 primitives = primitives*primitivesScaling;
 found = false;
@@ -64,6 +72,7 @@ edgesIDList = graph.vectorEdges{graph.solutionNode}';
 
 n_joints = size(active_joints,1);
 stateStorage = zeros(size(edgesIDList,1), n_joints*2);
+actionsStorage = zeros(size(edgesIDList,1),2);
 taskState = zeros(2,1);
 taskStorage = zeros(size(edgesIDList,1), 2);
 errorStorage = zeros(size(edgesIDList,1), 2);
@@ -85,6 +94,11 @@ for i=1:size(edgesIDList,1)
     errorStorage(i,:) = [errorAngleScalar, (taskState(2))- goal(2,1)];
 
 end
+
+for i = 1:(size(edgesIDList,1)-1)
+    actionsStorage(i,:) = primitives(graph.actionsList{graph.solutionNode}(i));
+end
+
 
 timeStorage = 0:deltaTPlanning:(deltaTPlanning*(size(edgesIDList,1) - 1));
 
