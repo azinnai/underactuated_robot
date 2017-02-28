@@ -9,12 +9,12 @@ l = 0.2;
 I = 0.05;
 lc = 0.1; 
 
-active_joints = [1;1;1;1;0];
+active_joints = [0;1;0;1;1];
 
 
 %Planning parameters
-depthTree = 10;
-maxBranching = 3000;
+depthTree = 100;
+maxBranching = 6000;
 threshold = 0.05;
 deltaTPlanning = 0.15;
 deltaT = 0.005;
@@ -31,8 +31,7 @@ jointLimitQ = pi/12;
 q = [-pi/2 + 0.1; 0.1; 0.1; 0.1; 0.1];
 qD = [0; 0; 0; 0; 0];
 
-goal = [pi/2 0;
-        l*5/2 0];
+goal = pi/2;
 
 fileName = 'activeJoints.txt';
 if exist(fileName,'file')
@@ -52,7 +51,7 @@ end
 
 
 
-primitives = [1, 0; -1, 0; 0, 1; 0, -1; 1, 1; 1, -1; -1, 1; -1,-1; 0 , 0];
+primitives = [1, 0; -1, 0; 0, 1; 0, -1; 1, 1; 1, -1; -1, 1; -1,-1];
 primitives = primitives(: ,:);
 primitives = primitives*primitivesScaling;
 found = false;
