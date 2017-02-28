@@ -37,7 +37,7 @@ for depth = 1:depthTree
         numFoundNodes = 0;
         for i=first:last
             for j=1:nPrimitives
-               newNode = checkConstraints(graph.verts(i,:),motionPrimitiveArray(j,:)', Knull, deltaTPlanning, deltaT, tauLimit, jointLimitQ, active_joints);
+               newNode = checkConstraints(graph.verts(i,:),motionPrimitiveArray(j,:)', Knull, deltaTPlanning, deltaT, tauLimit, jointLimitQ, active_joints,false);
 
                if (newNode ~= 9999)
                    

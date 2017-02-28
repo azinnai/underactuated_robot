@@ -1,4 +1,4 @@
-function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, deltaTPlanning, deltaT, tauLimit, jointLimit, active_joints)
+function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, deltaTPlanning, deltaT, tauLimit, jointLimit, active_joints, simulation)
 
     constraintViolated = false;
     n_joints = size(active_joints,1);
@@ -11,7 +11,7 @@ function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, delta
     epsilon = 0.000000008;
 
 
-    for i = 0 : deltaT : deltaTPlanning
+    for i = deltaT : deltaT : deltaTPlanning
 
 
         B = BFunc(q(2),q(3),q(4),q(5));
@@ -83,7 +83,6 @@ function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, delta
         end
         
         
-        
         q2DDCurrent = JbarPinvCurrent * (desiredTaskAcceleration - Jdot*qD + J1*inv(B11)*(C1 + h1)) + projectedGradient;
 
         q1DDCurrent = -inv(B11)*(B12*q2DDCurrent + C1 + h1);
@@ -120,13 +119,13 @@ function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, delta
             q = INVorder(q,active_joints);
             qD = INVorder(qD,active_joints);
             
-            if(constraintViolated) 
+            if ((constraintViolated) && (simulation == false)) 
                 break;
             end
             
     end
     
-    if (constraintViolated == false)
+    if ((constraintViolated == false) || (simulation == true))
         newNode = [INVorder(q,active_joints)', INVorder(qD,active_joints)'];
     else
         newNode = 9999;
