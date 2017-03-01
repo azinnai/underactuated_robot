@@ -119,6 +119,7 @@ function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, delta
             q = INVorder(q,active_joints);
             qD = INVorder(qD,active_joints);
             
+            
             if ((constraintViolated) && (simulation == false)) 
                 break;
             end
@@ -126,7 +127,7 @@ function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, delta
     end
     
     if ((constraintViolated == false) || (simulation == true))
-        newNode = [INVorder(q,active_joints)', INVorder(qD,active_joints)'];
+        newNode = [q', qD'];
     else
         newNode = 9999;
     end

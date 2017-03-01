@@ -108,7 +108,7 @@ for depth = 1:depthTree
         if (search == true) %If I have found a goal, the probabilistic pruning could cut it . So I disable it.
             if (numFoundNodes >maxBranching)
                 increment = floor(depth/10);
-                alfa = 0.65;
+                alfa = 0.75;
                 %alfa = alfa + 0.075 * increment;
                 
                 conservedNodes = pruningFunction(storage, taskGoal,alfa, maxBranching);
