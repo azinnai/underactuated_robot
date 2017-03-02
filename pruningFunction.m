@@ -40,7 +40,7 @@ for i = 1: size(newNodes,1)
     
     differenceFromStraightPose = boxMinus(newNodes(i,1:5)', goalJoints);
     
-    H(i) = H(i) + 10*(1/det(weightsJoints))*norm(differenceFromStraightPose' * weightsJoints * differenceFromStraightPose);
+    H(i) = H(i) + (1/det(weightsJoints))*norm(differenceFromStraightPose' * weightsJoints * differenceFromStraightPose);
     
 
 
@@ -48,7 +48,7 @@ for i = 1: size(newNodes,1)
     
 end
 
-HBest = min(H);
+HBest= min(H);
 
 H = HBest./H;
 

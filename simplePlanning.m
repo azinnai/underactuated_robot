@@ -74,9 +74,11 @@ for depth = 1:depthTree
             else speedDiff = 0;
             end
             
-            distanceFromGoal = norm([anglesDiff;lengthDiff;speedDiff]);
+            %distanceFromGoal = norm([anglesDiff;lengthDiff;speedDiff]);
+            angleDistance = abs(anglesDiff);
+            lenghtDistance = abs(lengthDiff);
             
-            if (distanceFromGoal <= threshold)
+            if (angleDistance <= threshold(1) && lenghtDistance <= threshold(2))
                 disp(strcat('WIN!!! at depth ', mat2str(depth)));
                 disp(mat2str(storage(i,:)));
                 disp(mat2str(taskFunc(storage(i,1),storage(i,2), storage(i,3), storage(i,4), storage(i,5))));
@@ -92,9 +94,9 @@ for depth = 1:depthTree
                 graph.vectorEdges{newVertexIndex} = [graph.vectorEdges{parents(i)}, newVertexIndex];
                 graph.actionsList{newVertexIndex} = [graph.actionsList{parents(i)}, actionsStorage(i)];
                 
-                if (distanceFromGoal <= bestSolution)
+                if (norm([angleDistance lengthDistance]) <= norm(bestSolution))
                     graph.solutionNode = newVertexIndex;
-                    bestSolution = distanceFromGoal;
+                    bestSolution = [angleDistance lengthDistance];
                 end
                 
             end
@@ -108,7 +110,7 @@ for depth = 1:depthTree
         if (search == true) %If I have found a goal, the probabilistic pruning could cut it . So I disable it.
             if (numFoundNodes >maxBranching)
                 increment = floor(depth/10);
-                alfa = 0.75;
+                alfa = 0.65;
                 %alfa = alfa + 0.075 * increment;
                 
                 conservedNodes = pruningFunction(storage, taskGoal,alfa, maxBranching);

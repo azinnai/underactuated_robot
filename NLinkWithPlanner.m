@@ -13,16 +13,19 @@ active_joints = [0;1;0;1;1];
 n_joints = size(active_joints,1);
 
 %Planning parameters
-depthTree = 70;
-maxBranching = 3000;
-threshold = 0.05;
+depthTree = 100;
+maxBranching = 300;
+thresholdAngle = 0.05;
+thresholdLenght = 0.2;
+threshold = [thresholdAngle thresholdLenght];
 deltaTPlanning = 0.15;
-deltaT = 0.025;
+deltaT = 0.005;
 
-primitivesScaling = 0.5;
+primitivesScaling = 2;
 Knull = 0; %This is used for projected gradient. Should not be a constant. When 0 projected gradient is disabled.
 
-primitives = [1, 0; -1, 0; 0, 1; 0, -1; 1, 1; 1, -1; -1, 1; -1,-1; 0, 0];
+%primitives = [1, 0; -1, 0; 0, 1; 0, -1; 1, 1; 1, -1; -1, 1; -1,-1];
+primitives = [1, 0; -1, 0; 0, 1; 0, -1];
 primitives = primitives(: ,:);
 primitives = primitives*primitivesScaling;
 
@@ -61,7 +64,7 @@ graph = simplePlanning([q', qD'],goal, primitives,Knull, tauLimit, jointLimitQ, 
 
 %If I have not found a solution, plot something anyhow.
 if sum(strcmp(fieldnames(graph), 'solutionNode')) == 0
-   graph.solutionNode = size(graph.vectorEdges,2)  ;
+   graph.solutionNode = size(graph.vectorEdges,2) -3 ;
 else
    fname = strcat('solution_',mat2str(r), '.mat');
 end
