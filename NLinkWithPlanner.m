@@ -13,16 +13,19 @@ active_joints = [0;1;0;1;1];
 n_joints = size(active_joints,1);
 
 %Planning parameters
-depthTree = 70;
-maxBranching = 3000;
-threshold = 0.05;
+depthTree = 100;
+maxBranching = 5000;
+thresholdAngle = 0.05;
+thresholdLength = 0.2;
 deltaTPlanning = 0.15;
 deltaT = 0.025;
 
-primitivesScaling = 0.5;
+alfa = 0.6;
+
+primitivesScaling = 1;
 Knull = 0; %This is used for projected gradient. Should not be a constant. When 0 projected gradient is disabled.
 
-primitives = [1, 0; -1, 0; 0, 1; 0, -1; 1, 1; 1, -1; -1, 1; -1,-1; 0, 0];
+primitives = [1, 0; -1, 0; 0, 0.5; 0, -0.5; 0.5, 0.25; 0.5, -0.25; -0.5, 0.25; -0.5,-0.25];
 primitives = primitives(: ,:);
 primitives = primitives*primitivesScaling;
 
@@ -53,38 +56,22 @@ else
 end
 
 
+threshold = [thresholdAngle; thresholdLength];
 
 
-
-graph = simplePlanning([q', qD'],goal, primitives,Knull, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT);
-
-
-%If I have not found a solution, plot something anyhow.
-if sum(strcmp(fieldnames(graph), 'solutionNode')) == 0
-   graph.solutionNode = size(graph.vectorEdges,2)  ;
-else
-   fname = strcat('solution_',mat2str(r), '.mat');
-end
+graph = simplePlanning([q', qD'],goal, primitives, alfa, Knull, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT);
 
 solutionID = graph.solutionNode;
 edgesIDList = graph.vectorEdges{solutionID}';
 nodeIterations = ceil(deltaTPlanning/deltaT);
 
-
-stateStorage = zeros(size(edgesIDList,1), n_joints*2);
 actionsStorage = zeros(size(edgesIDList,1)-1,2);
 
 for i = 1:(size(edgesIDList,1)-1)
     actionsStorage(i,:) = primitives(graph.actionsList{solutionID}(i),:);
 end
 
-for i = 1:(size(edgesIDList,1))
-    stateStorage(i,:) = graph.verts(edgesIDList(i),:);    
-end
-
-
-
-draw(actionsStorage,active_joints,deltaTPlanning,deltaT,Knull);
+draw(actionsStorage,active_joints,q,deltaTPlanning,deltaT,Knull);
 
 
 

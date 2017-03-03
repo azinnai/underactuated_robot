@@ -1,4 +1,4 @@
-function  graph = simplePlanning(qStart, taskGoal, motionPrimitiveArray, Knull, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT)
+function  graph = simplePlanning(qStart, taskGoal, motionPrimitiveArray, alfa, Knull, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT)
 
 
 
@@ -18,7 +18,7 @@ graph.actionsList{1} = [];
 search = true;
 addedNodes = 0;
 numNodesFound = 0;
-bestSolution = threshold;
+bestSolution = 99999;
 for depth = 1:depthTree
 
     if (search)
@@ -59,10 +59,10 @@ for depth = 1:depthTree
         for i=1:numFoundNodes
             
             taskValue = taskFunc(storage(i,1),storage(i,2),storage(i,3),storage(i,4),storage(i,5));
-            anglesDiff = boxMinus(taskValue(1), taskGoal(1,1));
+            anglesDiff = abs(boxMinus(taskValue(1), taskGoal(1,1)));
             
             if (size(taskGoal,1) == 2)
-                lengthDiff = taskValue(2) - taskGoal(2,1);
+                lengthDiff = abs(taskValue(2) - taskGoal(2,1));
             else
                 lengthDiff = 0;
             end
@@ -70,13 +70,15 @@ for depth = 1:depthTree
             if (size(taskGoal,2) == 2) %if I have specified velocity goal conditions 
                 J = JFunc(storage(i,1),storage(i,2),storage(i,3),storage(i,4),storage(i,5));
                 taskDotValue = J* storage(i,6:10)';
-                speedDiff = taskDotValue - taskGoal(:,2);
+                speedDiff = abs(taskDotValue - taskGoal(:,2));
             else speedDiff = 0;
             end
             
-            distanceFromGoal = norm([anglesDiff;lengthDiff;speedDiff]);
+            %distanceFromGoal = norm([anglesDiff;lengthDiff;speedDiff]);
             
-            if (distanceFromGoal <= threshold)
+
+            
+            if ((anglesDiff <= threshold(1)) &&(lengthDiff) <= threshold(2))
                 disp(strcat('WIN!!! at depth ', mat2str(depth)));
                 disp(mat2str(storage(i,:)));
                 disp(mat2str(taskFunc(storage(i,1),storage(i,2), storage(i,3), storage(i,4), storage(i,5))));
@@ -86,17 +88,16 @@ for depth = 1:depthTree
                 newVertexIndex = size(graph.verts,1) + 1;
                 
                 graph.verts(newVertexIndex,:) = storage(i,:);
-                %graph.adjMat(parents(i),newVerticeIndex) = 1;
-                %graph.adjMat(newVerticeIndex,parents(i)) = -1;
-                
                 graph.vectorEdges{newVertexIndex} = [graph.vectorEdges{parents(i)}, newVertexIndex];
                 graph.actionsList{newVertexIndex} = [graph.actionsList{parents(i)}, actionsStorage(i)];
+                
+                distanceFromGoal = norm([anglesDiff;lengthDiff]);
                 
                 if (distanceFromGoal <= bestSolution)
                     graph.solutionNode = newVertexIndex;
                     bestSolution = distanceFromGoal;
                 end
-                
+               
             end
         end
 
@@ -108,7 +109,6 @@ for depth = 1:depthTree
         if (search == true) %If I have found a goal, the probabilistic pruning could cut it . So I disable it.
             if (numFoundNodes >maxBranching)
                 increment = floor(depth/10);
-                alfa = 0.75;
                 %alfa = alfa + 0.075 * increment;
                 
                 conservedNodes = pruningFunction(storage, taskGoal,alfa, maxBranching);
@@ -122,11 +122,15 @@ for depth = 1:depthTree
                     newVertexIndex = size(graph.verts,1) + 1;
 
                     graph.verts(newVertexIndex,:) = storage(i,:);
-                    %graph.adjMat(parents(i),newVerticeIndex) = 1;
-                    %graph.adjMat(newVerticeIndex,parents(i)) = -1;
-
                     graph.vectorEdges{newVertexIndex} = [graph.vectorEdges{parents(i)}, newVertexIndex];
                     graph.actionsList{newVertexIndex} = [graph.actionsList{parents(i)}, actionsStorage(i)];
+                    
+                    distanceFromGoal = norm([anglesDiff;lengthDiff]);
+                    
+                    if (distanceFromGoal <= bestSolution)
+                        graph.solutionNode = newVertexIndex;
+                        bestSolution = distanceFromGoal;
+                    end
                 end
             end
         end
