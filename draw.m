@@ -1,4 +1,4 @@
-function draw(actionsStorage, active_joints, deltaTPlanning, deltaT,Knull)
+function draw(actionsStorage, active_joints,q, deltaTPlanning, deltaT,Knull)
 
 
     close all
@@ -15,7 +15,6 @@ function draw(actionsStorage, active_joints, deltaTPlanning, deltaT,Knull)
 
 
     %Initial state and task goal state
-    q = [-pi/2 + 0.1; 0.1; 0.1; 0.1; 0.1];
     qD = [0; 0; 0; 0; 0];
 
     goal = pi/2;
