@@ -1,4 +1,4 @@
-function indicesList = findSortedNeighbors(verts, qRand, jointRanges)
+function indicesList = findSortedNeighbors(verts, qRand, numberOfNodes)
 
 %goalNode = [qRand; 0; 0; 0; 0; 0];
 %goalJoints = goalNode(1:5);
@@ -11,10 +11,10 @@ weightTask1 = 0.7;
 goalPotentialEnergy = qRand(2)*sin(qRand(1));
 
 
-H = zeros(size(verts,1),1);
+H = zeros(numberOfNodes,1);
 
 
-for i = 1: size(verts,1)
+for i = 1: numberOfNodes
 
     %nodePotentialEnergy = computePotentialEnergy(verts(i,:));   
     %energyDifference = abs(goalPotentialEnergy - nodePotentialEnergy);
@@ -30,8 +30,8 @@ for i = 1: size(verts,1)
 
     
 end
-[Hordered, indicesList] = sort(H,'ascend');
 
+[Hordered, indicesList] = sort(H,'ascend');
 
 
 end

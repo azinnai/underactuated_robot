@@ -3,7 +3,7 @@ function graph = RRTplanning(qStart, xGoal, motionPrimitives, probBiasedExpansio
 
 nPrimitives = size(motionPrimitives,1); % number of motion primitives
 
-graph.verts = zeros(nVertices,5);                             % list of vertices: graph.verts(i,:) is the i-th stored configuration  
+graph.verts = zeros(nVertices,10);                             % list of vertices: graph.verts(i,:) is the i-th stored configuration  
 graph.vertsIndexArrayFreePrimitives = zeros(nVertices,nPrimitives);     % graph.vertsIndexArrayFreePrimitives(i,j) = 0 -> the j-th motion primitive has been already used from vertex graph.verts(i,:)    
 graph.adjMat = sparse(nVertices,nVertices,0); % adjacency matrix of an oriented graph
 graph.vectorEdges = {};                             % list of edges; each edge represents a path in the form of a sequence of configurations [q1; q2; ...; qm]
@@ -33,9 +33,10 @@ for s = 1:(nVertices-1)
     indexqNew = s + 1;
 
     % Find the configuration in the graph which is closest to xRand and has at least a free motion primitive
-    indices = findSortedNeighbors(graph.verts, xRand);
+    indices = findSortedNeighbors(graph.verts, xRand, s);
     
     for i=1:s
+         graph.vertsIndexArrayFreePrimitives(indices(i),:);
         if norm( graph.vertsIndexArrayFreePrimitives(indices(i),:) ) > 0 % if graph.verts(indices(i),:) has at least a free motion primitive 
             qNear = graph.verts(indices(i),:);
             indexqNear = indices(i);
@@ -47,13 +48,13 @@ for s = 1:(nVertices-1)
     indexArrayFreePrimitives = graph.vertsIndexArrayFreePrimitives(indexqNear,:); % extract the array representing the free primitives of qNear
     [qNew , indexArrayUsedPrimitive, state] = newConfiguration( xRand, qNear, xGoal, motionPrimitives, indexArrayFreePrimitives, deltaTPlanning, deltaT, tauLimit, jointLimits, threshold, Knull, activeJoints ); 
     %indexArrayUsedPrimitives contains failure primitives and the best available one
-    taskValues = taskFunc(qNew(1),qNew(2),qNew(3),qNew(4),qNew(5));
-
+    state
     switch state
            
         case 'advanced' %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-               
+               taskValues = taskFunc(qNew(1),qNew(2),qNew(3),qNew(4),qNew(5));
+
                % update the free primitives' array of the vertex qNear
                for h=1:length(indexArrayUsedPrimitive)
                    graph.vertsIndexArrayFreePrimitives(indexqNear,indexArrayUsedPrimitive(h)) = 0;
@@ -70,14 +71,16 @@ for s = 1:(nVertices-1)
                % update adjacency matrices
                graph.adjMat(indexqNear,indexqNew) = 1; 
 
-               if (norm(taskValues - taskGoal)<bestSolutionValue)
+               if (norm(taskValues - xGoal)<bestSolutionValue)
                	graph.solutionNode = indexqNew;
                	bestSolutionValue = taskValues;
                end
          
         
         case 'reached' %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            
+               
+               taskValues = taskFunc(qNew(1),qNew(2),qNew(3),qNew(4),qNew(5));
+
                % update the free primitives' array of the vertex qNear
                for h=1:length(indexArrayUsedPrimitive)
                    graph.vertsIndexArrayFreePrimitives(indexqNear,indexArrayUsedPrimitive(h)) = 0;
@@ -102,7 +105,7 @@ for s = 1:(nVertices-1)
                
                break; % exit from the loop
         
-        case 'Trapped' %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        case 'trapped' %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
               %All the available primitives failed, sample a new point
         otherwise      %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                error('unknown state')

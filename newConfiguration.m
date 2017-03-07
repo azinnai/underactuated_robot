@@ -20,7 +20,7 @@ for i=1:nPrimitives
     % generate the i-th motion primitive
     desiredTaskAcceleration = motionPrimitives(i);
     
-    Q = checkConstraints(qNear, desiredTaskAcceleration, Knull, deltaTPlanning, deltaT, tauLimit, jointLimit, active_joints, simulation)
+    Q = checkConstraints(qNear, desiredTaskAcceleration, Knull, deltaTPlanning, deltaT, tauLimit, jointLimit, active_joints, simulation);
 
     % now Q represents the motion primitive path -> it is a sequence of configurations
     
