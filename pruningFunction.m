@@ -3,7 +3,7 @@ function conservedNodes = pruningFunction(newNodes, taskGoal, alfa, maxBranching
 
 goalNode = [pi/2; 0; 0; 0; 0; 0; 0; 0; 0; 0];
 goalJoints = goalNode(1:5);
-potentialWeight = 0.75;
+potentialWeight = 0.5;
 
 %weightsJoints = eye(size(goalJoints,1));  
 weightsJoints = diag([5;5;5;4;3]);
@@ -35,7 +35,7 @@ for i = 1: size(newNodes,1)
     
     energyDifference = potentialWeight * abs(goalPotentialEnergy - nodePotentialEnergy) + (1 - potentialWeight) * abs( goalKineticEnergy - nodeKineticEnergy); 
    
-
+   %energyDifference = abs((nodePotentialEnergy + nodeKineticEnergy) - (goalPotentialEnergy - goalKineticEnergy));
     
     H(i) = 2*(energyDifference);
 

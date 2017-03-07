@@ -14,18 +14,18 @@ n_joints = size(active_joints,1);
 
 %Planning parameters
 depthTree = 100;
-maxBranching = 5000;
+maxBranching = 15000;
 thresholdAngle = 0.05;
-thresholdLength = 0.2;
+thresholdLength = 0.3;
 deltaTPlanning = 0.15;
 deltaT = 0.025;
 
-alfa = 0.6;
+alfa = 0.65;
 
-primitivesScaling = 1;
+primitivesScaling = 1.2;
 Knull = 0; %This is used for projected gradient. Should not be a constant. When 0 projected gradient is disabled.
 
-primitives = [1, 0; -1, 0; 0, 0.5; 0, -0.5; 0.5, 0.25; 0.5, -0.25; -0.5, 0.25; -0.5,-0.25];
+primitives = [1, 0; -1, 0; 0, 0.25; 0, -0.25; 0.5, 0.125; 0.5, -0.125; -0.5, 0.125; -0.5,-0.125];
 primitives = primitives(: ,:);
 primitives = primitives*primitivesScaling;
 
