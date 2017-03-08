@@ -16,7 +16,7 @@ n_joints = size(active_joints,1);
 depthTree = 300;
 maxBranching = 500;
 thresholdAngle = 0.01;
-thresholdLength = 0.3;
+thresholdLength = 0.2;
 deltaTPlanning = 0.15;
 deltaT = 0.005;
 
@@ -38,7 +38,7 @@ primitives = primitives(: ,:);
 primitives = primitives*primitivesScaling;
 
 %Constraints on torques and joint positions
-tauLimit = 2;
+tauLimit = 1.5;
 jointLimitQ = pi/12;
 
 %Initial state and task goal state
