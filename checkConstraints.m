@@ -51,31 +51,9 @@ function newNode = checkConstraints(state, desiredTaskAcceleration, Knull, delta
             constraintViolated = true;
         end    
 
-        
+        goal = zeros(n_joints_active,1);
         if (Knull > 0)
-            nullSpaceAcceleration = zeros(n_joints_active,1);
-            for p=1:n_joints_active
-
-                qPlus = q;
-                qPlus(p + n_joints_unactive) = qPlus(p + n_joints_unactive) + epsilon;
-                qMinus = q;
-                qMinus(p + n_joints_unactive) = qMinus(p + n_joints_unactive) - epsilon;
-
-                qPlus = INVorder(qPlus, active_joints);
-                qMinus = INVorder(qMinus, active_joints);
-
-                JbarPlus = JbarFunc(qPlus(1),qPlus(2),qPlus(3),qPlus(4),qPlus(5));
-                JbarMinus = JbarFunc(qMinus(1),qMinus(2),qMinus(3),qMinus(4),qMinus(5));
-
-
-                HPlus = sqrt(det(JbarPlus*JbarPlus'));
-                HMinus = sqrt(det(JbarMinus*JbarMinus'));
-
-                gradHp = (HPlus - HMinus)/(2*epsilon);
-
-                nullSpaceAcceleration(p) = gradHp;
-            end
-            
+            nullSpaceAcceleration = -boxMinus(goal,q(n_joints_unactive+1:n_joints));
             projectedGradient = Knull*(eye(n_joints_active) - JbarPinvCurrent*JbarCurrent)*nullSpaceAcceleration;
             
         else

@@ -9,23 +9,31 @@ l = 0.2;
 I = 0.05;
 lc = 0.1; 
 
-active_joints = [0;1;0;1;1];
+active_joints = [0;1;1;1;1];
 n_joints = size(active_joints,1);
 
 %Planning parameters
-depthTree = 1000;
-maxBranching = 15000;
-thresholdAngle = 0.05;
+depthTree = 300;
+maxBranching = 500;
+thresholdAngle = 0.01;
 thresholdLength = 0.3;
 deltaTPlanning = 0.15;
 deltaT = 0.005;
 
-alfa = 0.65;
+alfa = 0.7;
 
-primitivesScaling = 0.6;
-Knull = 0; %This is used for projected gradient. Should not be a constant. When 0 projected gradient is disabled.
+primitivesScaling = 2;
+Knull = 10; %This is used for projected gradient. Should not be a constant. When 0 projected gradient is disabled.
 
-primitives = [1, 0; -1, 0; 0, 0.25; 0, -0.25; 0.5, 0.125; 0.5, -0.125; -0.5, 0.125; -0.5,-0.125];
+primitives = [1, 0; 
+            -1, 0; 
+            0, 0.25; 
+            0, -0.25; 
+            0.5, 0.125; 
+            0.5, -0.125; 
+            -0.5, 0.125; 
+            -0.5,-0.125];
+        
 primitives = primitives(: ,:);
 primitives = primitives*primitivesScaling;
 
@@ -59,8 +67,8 @@ end
 threshold = [thresholdAngle; thresholdLength];
 
 
-%graph = simplePlanning([q', qD'],goal, primitives, alfa, Knull, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT);
-graph = RRTplanning([q', qD'],goal, primitives, alfa, Knull, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT);
+graph = simplePlanning([q', qD'],goal, primitives, alfa, Knull, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT);
+%graph = RRTplanning([q', qD'],goal, primitives, alfa, Knull, tauLimit, jointLimitQ, active_joints, depthTree, maxBranching, threshold, deltaTPlanning, deltaT);
 solutionID = graph.solutionNode;
 edgesIDList = graph.vectorEdges{solutionID}';
 nodeIterations = ceil(deltaTPlanning/deltaT);
