@@ -1,5 +1,6 @@
 clear all
 clc
+close all
 
 %Robot parameters
 m1 = 0.2;
@@ -36,14 +37,15 @@ oldState = [-pi/3 0 0 0]';
 newState = [0 0 0 0]';
 
 %0 refers to the desired acceleration
-goal = [pi/2 0 0];
- 
-Kd = 25  ;
-Kp = 350;
+%goal = [pi/2 0 0];
+
+
+Kd = 20;
+Kp = 200;
 deltaT = 1/1000;
-totalT = 30;
+totalT = 5;
 saturationQ2D = 100 ;
-tauLimit = 100;
+tauLimit = 5;
 jointLimitQ1 = pi;
 jointLimitQ2 = pi;
 
@@ -55,14 +57,16 @@ taskStorage = zeros(totalIterations,1);
 errorStorage = zeros(totalIterations,1);
 tauStorage = zeros(totalIterations,1);
 indexStorage = 0;
+k = 0;
 
 for t=0:deltaT:totalT
     
-    
+    %goal = [1+0.5*sin(4*k*deltaT) 0 0]';
+    goal = [pi/2 0 0];
     if (mod(t,1)==0)
         disp(t);
     end
-    
+    k = k+1;
     oldState;
      
     tauViolated = false;
@@ -117,7 +121,7 @@ taskDot = J*[oldState(3);oldState(4)];
     
     
     actualMat = [cos(task), - sin(task); sin(task), cos(task)];
-    referenceMat = [cos(goal(1)), - sin(goal(1)); sin(goal(1)), cos(goal(1))];
+    referenceMat = [cos(goal(1)), -sin(goal(1)); sin(goal(1)), cos(goal(1))];
     errorMat = (actualMat)\referenceMat;
     errorVec = atan2(errorMat(2,1),errorMat(1,1));
     
@@ -205,25 +209,7 @@ link2.Color = 'r';
 legend([link1,link2], 'UNACTUATED','ACTUATED')
 
 x0 = [0,0]; %Origin of the base link
-
-timeStorage = linspace(0,totalT,totalIterations+1)';
-
-figure
-title('Error Evolution');
-xlabel('Time');
-ylabel('ERROR');
-plot(timeStorage,errorStorage);
-
-figure
-title('TAU Evolution');
-xlabel('Time');
-ylabel('TAU');
-plot(timeStorage,tauStorage);
-
-
-
-
-for i=1:10: size(stateStorage,1)
+for i=1:12: size(stateStorage,1)
     x1 = [l1*cos(stateStorage(i,1)), l1*sin(stateStorage(i,1))];
     x2 = x1 + [l2*cos(stateStorage(i,1) + stateStorage(i,2)),l2*sin(stateStorage(i,1) + stateStorage(i,2))];
     
@@ -235,13 +221,36 @@ for i=1:10: size(stateStorage,1)
     
     drawnow;
     
+    if i==1
+        pause
+    end
     %pause(deltaT/2);
     
     
 end
 
 
+timeStorage = linspace(0,totalT,totalIterations+1)';
+subplot(2,2,1);
+plot(timeStorage,errorStorage);
+title('Error Evolution');
+xlabel('Time');
+ylabel('ERROR');
 
+subplot(2,2,2);
+plot(timeStorage,tauStorage);
+title('TAU Evolution');
+xlabel('Time');
+ylabel('TAU');
+
+subplot(2,2,3);
+%plot(timeStorage, taskStorage, 'b',timeStorage,1+0.5*sin(4*timeStorage),'g');
+plot(timeStorage, taskStorage, 'b',timeStorage,1.57+0*timeStorage,'g');
+
+
+title('Task Evolution');
+xlabel('Time');
+ylabel('Theta end effector');
 
 
 
